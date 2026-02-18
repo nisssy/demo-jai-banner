@@ -61,7 +61,20 @@ const allBannerTypes: BannerType[] = [
   "都道府県バナー",
 ];
 
-const filterBannerTypes = ["すべて", ...allBannerTypes.filter(t => t !== "未定")];
+// 絞り込み用のバナー種別リスト
+const filterBannerOptions = [
+  "すべて",
+  "【FP課】マイページバナー",
+  "お知らせバナー",
+  "サブバナー",
+  "スプラッシュバナー",
+  "マイページバナー",
+  "メインバナー",
+  "ローテーションバナー",
+  "動画バナー",
+  "取材来店バナー",
+  "都道府県バナー",
+];
 
 const hourOptions = Array.from({ length: 24 }, (_, i) => ({
   value: i.toString(),
@@ -410,7 +423,7 @@ export function SlotCalendar({
               <SelectValue placeholder="バナー種別" />
             </SelectTrigger>
             <SelectContent>
-              {filterBannerTypes.map((type) => (
+              {filterBannerOptions.map((type) => (
                 <SelectItem key={type} value={type}>
                   {type}
                 </SelectItem>

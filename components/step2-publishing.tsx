@@ -169,6 +169,7 @@ export function Step2Publishing({ caseData, onCancel }: Step2PublishingProps) {
             onRemove={handleRemoveApplication}
             readOnly={isReviewPending}
             alwaysShowData={true}
+            isAnniversaryPack={caseData.isAnniversaryPack}
           />
 
           {/* 掲載内容 */}

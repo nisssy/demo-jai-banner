@@ -2,15 +2,23 @@
 
 import React from "react";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Upload, FileText, X, Download, Eye, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface ApplicationData {
+  applicationType: string;
   companyName: string;
   storeName: string;
   contractAmount: string;
@@ -22,6 +30,16 @@ interface ApplicationData {
   notes: string;
 }
 
+const APPLICATION_TYPES = [
+  "【マルハン様用】LINE広告お申込書Ver1.0（友だちオーディエンス）",
+  "【マルハン様用】LINE広告お申込書Ver2.0_1018",
+  "LINE広告お申込書（電話番号ターゲティング）Ver1.0_0604",
+  "LINE広告お申込書Ver1.0（友だちオーディエンス）",
+  "LINE広告お申込書Ver2.0_1018",
+  "LINE広告お申込書ベガス米沢店0125",
+  "LINE広告友だち追加申込書Ver2.0_1018",
+];
+
 interface ApplicationUploadProps {
   documentUrl?: string;
   onUpload: (url: string) => void;
@@ -29,9 +47,16 @@ interface ApplicationUploadProps {
   readOnly?: boolean;
   /** trueの場合、初期状態でサンプルデータを展開して表示 */
   alwaysShowData?: boolean;
+  /** 周年パックかどうか */
+  isAnniversaryPack?: boolean;
+  /** 使用中の周年パック名 */
+  anniversaryPackTitle?: string;
+  /** 周年パックの有効期限 */
+  anniversaryPackExpiry?: string;
 }
 
 const sampleApplicationData: ApplicationData = {
+  applicationType: APPLICATION_TYPES[0],
   companyName: "株式会社サンプル",
   storeName: "東京本店",
   contractAmount: "450,000",
@@ -49,6 +74,9 @@ export function ApplicationUpload({
   onRemove,
   readOnly = false,
   alwaysShowData = false,
+  isAnniversaryPack = false,
+  anniversaryPackTitle,
+  anniversaryPackExpiry,
 }: ApplicationUploadProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [fileName, setFileName] = useState<string | null>(
@@ -58,6 +86,13 @@ export function ApplicationUpload({
     alwaysShowData ? { ...sampleApplicationData } : null
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 周年パックの場合、契約金額を0にする
+  useEffect(() => {
+    if (isAnniversaryPack && applicationData && applicationData.contractAmount !== "0") {
+      setApplicationData((prev) => (prev ? { ...prev, contractAmount: "0" } : null));
+    }
+  }, [isAnniversaryPack, applicationData]);
 
   const handleFileSelect = (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -202,33 +237,65 @@ export function ApplicationUpload({
         {applicationData && (
           <div className="rounded-lg border p-4 space-y-4">
             <h4 className="text-sm font-medium">申込書の内容</h4>
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">申込書タイプ</Label>
+              <Select
+                value={applicationData.applicationType}
+                onValueChange={(value) => handleDataChange("applicationType", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="申込書タイプを選択" />
+                </SelectTrigger>
+                <SelectContent>
+                  {APPLICATION_TYPES.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">法人名</Label>
-                {readOnly ? (
-                  <p className="text-sm rounded-md border bg-muted/30 px-3 py-2">{applicationData.companyName}</p>
-                ) : (
-                  <Input
-                    value={applicationData.companyName}
-                    onChange={(e) => handleDataChange("companyName", e.target.value)}
-                  />
-                )}
+                <Input
+                  value={applicationData.companyName}
+                  onChange={(e) => handleDataChange("companyName", e.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">店舗名</Label>
-                {readOnly ? (
-                  <p className="text-sm rounded-md border bg-muted/30 px-3 py-2">{applicationData.storeName}</p>
-                ) : (
-                  <Input
-                    value={applicationData.storeName}
-                    onChange={(e) => handleDataChange("storeName", e.target.value)}
-                  />
-                )}
+                <Input
+                  value={applicationData.storeName}
+                  onChange={(e) => handleDataChange("storeName", e.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">契約金額</Label>
-                {readOnly ? (
-                  <p className="text-sm rounded-md border bg-muted/30 px-3 py-2">{applicationData.contractAmount}円</p>
+                <Input
+                  value={applicationData.contractAmount}
+                  onChange={(e) => handleDataChange("contractAmount", e.target.value)}
+                  disabled={isAnniversaryPack}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">ホール請求額</Label>
+                {isAnniversaryPack ? (
+                  <div className="space-y-2">
+                    <Input value="¥0" readOnly className="bg-muted/30 font-medium" />
+                    {anniversaryPackTitle && (
+                      <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2">
+                        <p className="text-xs font-medium text-blue-800">
+                          周年パック適用中: {anniversaryPackTitle}
+                        </p>
+                        {anniversaryPackExpiry && (
+                          <p className="text-xs text-blue-600 mt-0.5">
+                            有効期限: {anniversaryPackExpiry}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <Input
                     value={applicationData.contractAmount}
@@ -238,73 +305,49 @@ export function ApplicationUpload({
               </div>
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">バナー種別</Label>
-                {readOnly ? (
-                  <p className="text-sm rounded-md border bg-muted/30 px-3 py-2">{applicationData.bannerType}</p>
-                ) : (
-                  <Input
-                    value={applicationData.bannerType}
-                    onChange={(e) => handleDataChange("bannerType", e.target.value)}
-                  />
-                )}
+                <Input
+                  value={applicationData.bannerType}
+                  onChange={(e) => handleDataChange("bannerType", e.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">開始日</Label>
-                {readOnly ? (
-                  <p className="text-sm rounded-md border bg-muted/30 px-3 py-2">{applicationData.startDate}</p>
-                ) : (
-                  <Input
-                    type="date"
-                    value={applicationData.startDate}
-                    onChange={(e) => handleDataChange("startDate", e.target.value)}
-                  />
-                )}
+                <Input
+                  type="date"
+                  value={applicationData.startDate}
+                  onChange={(e) => handleDataChange("startDate", e.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">終了日</Label>
-                {readOnly ? (
-                  <p className="text-sm rounded-md border bg-muted/30 px-3 py-2">{applicationData.endDate}</p>
-                ) : (
-                  <Input
-                    type="date"
-                    value={applicationData.endDate}
-                    onChange={(e) => handleDataChange("endDate", e.target.value)}
-                  />
-                )}
+                <Input
+                  type="date"
+                  value={applicationData.endDate}
+                  onChange={(e) => handleDataChange("endDate", e.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">担当者名</Label>
-                {readOnly ? (
-                  <p className="text-sm rounded-md border bg-muted/30 px-3 py-2">{applicationData.contactPerson}</p>
-                ) : (
-                  <Input
-                    value={applicationData.contactPerson}
-                    onChange={(e) => handleDataChange("contactPerson", e.target.value)}
-                  />
-                )}
+                <Input
+                  value={applicationData.contactPerson}
+                  onChange={(e) => handleDataChange("contactPerson", e.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">連絡先メール</Label>
-                {readOnly ? (
-                  <p className="text-sm rounded-md border bg-muted/30 px-3 py-2">{applicationData.contactEmail}</p>
-                ) : (
-                  <Input
-                    type="email"
-                    value={applicationData.contactEmail}
-                    onChange={(e) => handleDataChange("contactEmail", e.target.value)}
-                  />
-                )}
+                <Input
+                  type="email"
+                  value={applicationData.contactEmail}
+                  onChange={(e) => handleDataChange("contactEmail", e.target.value)}
+                />
               </div>
             </div>
             <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">備考</Label>
-              {readOnly ? (
-                <p className="text-sm rounded-md border bg-muted/30 px-3 py-2">{applicationData.notes}</p>
-              ) : (
-                <Input
-                  value={applicationData.notes}
-                  onChange={(e) => handleDataChange("notes", e.target.value)}
-                />
-              )}
+              <Input
+                value={applicationData.notes}
+                onChange={(e) => handleDataChange("notes", e.target.value)}
+              />
             </div>
           </div>
         )}

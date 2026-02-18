@@ -108,6 +108,40 @@ export interface Store {
   corporationId: string;
 }
 
+// 周年パック
+export interface AnniversaryPack {
+  id: string;
+  corporationId: string;
+  title: string; // "5万円プラン" | "10万円プラン" | "20万円プラン"
+  expiryDate: Date;
+  remainingAmount: number;
+}
+
+// 周年パックモックデータ
+export const mockAnniversaryPacks: AnniversaryPack[] = [
+  {
+    id: "pack-1",
+    corporationId: "corp-1",
+    title: "10万円プラン",
+    expiryDate: new Date("2026-06-30"),
+    remainingAmount: 75000,
+  },
+  {
+    id: "pack-2",
+    corporationId: "corp-1",
+    title: "5万円プラン",
+    expiryDate: new Date("2026-03-31"),
+    remainingAmount: 30000,
+  },
+  {
+    id: "pack-3",
+    corporationId: "corp-2",
+    title: "20万円プラン",
+    expiryDate: new Date("2026-12-31"),
+    remainingAmount: 150000,
+  },
+];
+
 // モックデータ
 export const mockCorporations: Corporation[] = [
   {

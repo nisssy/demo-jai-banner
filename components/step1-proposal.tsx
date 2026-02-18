@@ -15,12 +15,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import { SlotCalendar } from "@/components/slot-calendar";
 import { useCaseStore } from "@/lib/case-store";
 import type { Case, ProposalSlot } from "@/lib/types";
-import { Send, X, Link } from "lucide-react";
+import { Send, X } from "lucide-react";
 
 interface Step1ProposalProps {
   caseData: Case;
@@ -35,10 +33,6 @@ export function Step1Proposal({ caseData, onCancel }: Step1ProposalProps) {
   );
   const [showSkipDialog, setShowSkipDialog] = useState(false);
   const [showProceedDialog, setShowProceedDialog] = useState(false);
-  const [billingAmount, setBillingAmount] = useState<number | null>(caseData.billingAmount ?? null);
-  const [isAnniversaryPack, setIsAnniversaryPack] = useState(caseData.isAnniversaryPack ?? false);
-  const [anniversaryPackCode, setAnniversaryPackCode] = useState(caseData.anniversaryPackCode ?? "");
-  const [isLinking, setIsLinking] = useState(false);
 
   const handleAddSlot = (slot: ProposalSlot) => {
     addProposalSlot(caseData.id, slot);
@@ -48,23 +42,9 @@ export function Step1Proposal({ caseData, onCancel }: Step1ProposalProps) {
     removeProposalSlot(caseData.id, slotId);
   };
 
-  const handleLinkAnniversaryPack = () => {
-    if (!anniversaryPackCode) return;
-    setIsLinking(true);
-    // シミュレーション: コードから金額を取得
-    setTimeout(() => {
-      const mockAmount = anniversaryPackCode === "AP-001" ? 500000 : anniversaryPackCode === "AP-002" ? 800000 : 350000;
-      setBillingAmount(mockAmount);
-      setIsLinking(false);
-    }, 800);
-  };
-
   const handleSave = () => {
     updateCase(caseData.id, {
       implementationPolicy,
-      billingAmount,
-      isAnniversaryPack,
-      anniversaryPackCode: isAnniversaryPack ? anniversaryPackCode : undefined,
     });
   };
 
@@ -86,66 +66,6 @@ export function Step1Proposal({ caseData, onCancel }: Step1ProposalProps) {
           <CardTitle>提案内容</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* 請求額 */}
-          <div className="space-y-3">
-            <Label className="text-base font-medium">請求額</Label>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">¥</span>
-              <Input
-                type="text"
-                placeholder="金額"
-                value={billingAmount != null ? billingAmount.toLocaleString() : ""}
-                disabled={isAnniversaryPack}
-                onChange={(e) => {
-                  if (!isAnniversaryPack) {
-                    const val = e.target.value.replace(/,/g, "");
-                    const num = Number.parseInt(val, 10);
-                    setBillingAmount(Number.isNaN(num) ? null : num);
-                  }
-                }}
-                className="max-w-xs"
-              />
-            </div>
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="anniversary-pack"
-                  checked={isAnniversaryPack}
-                  onCheckedChange={(checked) => {
-                    const val = checked === true;
-                    setIsAnniversaryPack(val);
-                    if (!val) {
-                      setBillingAmount(caseData.billingAmount ?? null);
-                    }
-                  }}
-                />
-                <Label htmlFor="anniversary-pack" className="text-sm cursor-pointer">
-                  周年パック連携
-                </Label>
-              </div>
-              {isAnniversaryPack && (
-                <div className="flex items-center gap-2 pl-6">
-                  <Input
-                    type="text"
-                    placeholder="周年パックコード（例: AP-001）"
-                    value={anniversaryPackCode}
-                    onChange={(e) => setAnniversaryPackCode(e.target.value)}
-                    className="max-w-xs"
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={!anniversaryPackCode || isLinking}
-                    onClick={handleLinkAnniversaryPack}
-                  >
-                    <Link className="mr-1.5 h-3.5 w-3.5" />
-                    {isLinking ? "連携中..." : "連携"}
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
-
           {/* 掲載枠カレンダー */}
           <div className="space-y-2">
             <Label className="text-base font-medium">掲載日時とバナー種別</Label>
