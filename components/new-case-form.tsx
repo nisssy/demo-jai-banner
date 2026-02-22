@@ -20,8 +20,9 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { ChevronLeft, ChevronUp, ChevronDown, Plus } from "lucide-react";
-import { mockCorporations, mockAnniversaryPacks } from "@/lib/types";
-import type { BannerType } from "@/lib/types";
+import { mockAnniversaryPacks } from "@/lib/types";
+import type { CompanyData, HallData } from "@/lib/types";
+import { CompanyHallCombobox } from "@/components/company-hall-combobox";
 import { useCaseStore } from "@/lib/case-store";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
@@ -44,8 +45,8 @@ interface NewCaseFormProps {
 export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
   const { createCase } = useCaseStore();
 
-  const [selectedCorporation, setSelectedCorporation] = useState<string>("");
-  const [selectedStore, setSelectedStore] = useState<string>("");
+  const [selectedCompany, setSelectedCompany] = useState<CompanyData | null>(null);
+  const [selectedHall, setSelectedHall] = useState<HallData | null>(null);
   const [caseName, setCaseName] = useState("");
   const [staffName, setStaffName] = useState("");
   const [requestDate, setRequestDate] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -54,43 +55,9 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
     { id: "1", category: "", eventType: "", isOpen: true, usageMethod: "", selectedPackId: "", billingAmount: "" },
   ]);
 
-  const allStores = mockCorporations.flatMap((corp) =>
-    corp.stores.map((store) => ({
-      ...store,
-      corpId: corp.id,
-      corpName: corp.name,
-    }))
-  );
-
-  const selectedCorp = mockCorporations.find((c) => c.id === selectedCorporation);
-
-  const displayStores = selectedCorporation
-    ? allStores.filter((s) => s.corpId === selectedCorporation)
-    : allStores;
-
-  const corpId = selectedCorp ? `CORP-${String(mockCorporations.indexOf(selectedCorp) + 1).padStart(3, "0")}` : "";
-  const selectedStoreObj = allStores.find((s) => s.id === selectedStore);
-  const storeIndex = selectedStoreObj
-    ? mockCorporations
-        .find((c) => c.id === selectedStoreObj.corpId)
-        ?.stores.findIndex((s) => s.id === selectedStore) ?? -1
-    : -1;
-  const hallId = selectedStoreObj
-    ? `${corpId || `CORP-${String(mockCorporations.findIndex((c) => c.id === selectedStoreObj.corpId) + 1).padStart(3, "0")}`}-HALL-${String(storeIndex + 1).padStart(2, "0")}`
-    : "";
-
-  const handleCorporationChange = (value: string) => {
-    setSelectedCorporation(value);
-    setSelectedStore("");
-  };
-
-  const handleStoreChange = (storeId: string) => {
-    setSelectedStore(storeId);
-    const store = allStores.find((s) => s.id === storeId);
-    if (store) {
-      setSelectedCorporation(store.corpId);
-    }
-  };
+  const corpId = selectedCompany?.companyId ?? "";
+  const hallId = selectedHall?.hallId ?? "";
+  const hallSalesPerson = selectedHall?.salesPersonName ?? "";
 
   const addMaterial = () => {
     setMaterials([
@@ -125,28 +92,22 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
     );
   };
 
-  // 選択中の法人に紐づく周年パック
-  const corpForPacks = selectedCorp || (selectedStoreObj
-    ? mockCorporations.find((c) => c.id === selectedStoreObj.corpId)
-    : null);
-  const corporationPacks = corpForPacks
+  // 選択中の法人に紐づく周年パック（mockAnniversaryPacksのcorporationIdは旧形式"corp-1"等）
+  const legacyCorporationId = selectedCompany
+    ? `corp-${selectedCompany.id}`
+    : null;
+  const corporationPacks = legacyCorporationId
     ? mockAnniversaryPacks
-        .filter((p) => p.corporationId === corpForPacks.id)
+        .filter((p) => p.corporationId === legacyCorporationId)
         .sort((a, b) => a.expiryDate.getTime() - b.expiryDate.getTime())
     : [];
   const hasPacks = corporationPacks.length > 0;
   const nearestPack = corporationPacks.length > 0 ? corporationPacks[0] : null;
 
   const handleSubmit = () => {
-    if (!selectedCorporation || !selectedStore) return;
-
-    const corp = mockCorporations.find((c) => c.id === selectedCorporation);
-    const store = corp?.stores.find((s) => s.id === selectedStore);
-
-    if (corp && store) {
-      const newCase = createCase(corp.name, store.name);
-      onCaseCreated(newCase.id);
-    }
+    if (!selectedCompany || !selectedHall) return;
+    const newCase = createCase(selectedCompany.name, selectedHall.name);
+    onCaseCreated(newCase.id);
   };
 
   return (
@@ -167,26 +128,19 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
         <h2 className="text-lg font-bold mb-6">基本情報</h2>
 
         <div className="space-y-5">
-          {/* 法人名 / 法人ID */}
+          {/* 法人名・ホール名（コンボボックス） */}
+          <div className="space-y-2">
+            <Label className="text-sm">法人名・ホール名</Label>
+            <CompanyHallCombobox
+              selectedCompany={selectedCompany}
+              selectedHall={selectedHall}
+              onSelectCompany={setSelectedCompany}
+              onSelectHall={setSelectedHall}
+            />
+          </div>
+
+          {/* 法人ID / ホールID */}
           <div className="grid grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label className="text-sm">法人名</Label>
-              <Select
-                value={selectedCorporation}
-                onValueChange={handleCorporationChange}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="法人名を検索..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {mockCorporations.map((corp) => (
-                    <SelectItem key={corp.id} value={corp.id}>
-                      {corp.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
             <div className="space-y-2">
               <Label className="text-sm">法人ID</Label>
               <Input
@@ -195,28 +149,6 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
                 className="bg-muted/30"
                 placeholder=""
               />
-            </div>
-          </div>
-
-          {/* ホール名 / ホールID */}
-          <div className="grid grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label className="text-sm">ホール名</Label>
-              <Select
-                value={selectedStore}
-                onValueChange={handleStoreChange}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="ホール名を検索..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {displayStores.map((store) => (
-                    <SelectItem key={store.id} value={store.id}>
-                      {selectedCorporation ? store.name : `${store.corpName} - ${store.name}`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
             <div className="space-y-2">
               <Label className="text-sm">ホールID</Label>
@@ -244,9 +176,13 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
             <div className="space-y-2">
               <Label className="text-sm">ホール担当営業</Label>
               <Input
-                placeholder="例: 山田 太郎"
-                value={staffName}
-                onChange={(e) => setStaffName(e.target.value)}
+                placeholder="ホールを選択すると自動入力されます"
+                value={hallSalesPerson || staffName}
+                readOnly={!!hallSalesPerson}
+                className={hallSalesPerson ? "bg-muted/30" : ""}
+                onChange={(e) => {
+                  if (!hallSalesPerson) setStaffName(e.target.value);
+                }}
               />
             </div>
             <div className="space-y-2">
@@ -325,7 +261,6 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
                           <SelectValue placeholder="選択してください" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="未定">未定</SelectItem>
                           <SelectItem value="【FP課】マイページバナー">【FP課】マイページバナー</SelectItem>
                           <SelectItem value="お知らせバナー">お知らせバナー</SelectItem>
                           <SelectItem value="サブバナー">サブバナー</SelectItem>
@@ -510,7 +445,7 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
         </Button>
         <Button
           onClick={handleSubmit}
-          disabled={!selectedCorporation || !selectedStore}
+          disabled={!selectedCompany || !selectedHall}
           className="bg-blue-600 hover:bg-blue-700 text-white px-8"
         >
           案件を作成

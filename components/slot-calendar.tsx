@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChevronLeft, ChevronRight, Clock, Sparkles, X, Filter } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, Sparkles, X, Filter, MousePointerClick } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ProposalSlot, BannerType, AreaSlot, SlotBooking } from "@/lib/types";
 import { mockAreaSlots, mockBookings } from "@/lib/types";
@@ -48,7 +48,6 @@ interface SlotCalendarProps {
 }
 
 const allBannerTypes: BannerType[] = [
-  "未定",
   "【FP課】マイページバナー",
   "お知らせバナー",
   "サブバナー",
@@ -62,18 +61,9 @@ const allBannerTypes: BannerType[] = [
 ];
 
 // 絞り込み用のバナー種別リスト
-const filterBannerOptions = [
+const filterBannerOptions: (BannerType | "すべて")[] = [
   "すべて",
-  "【FP課】マイページバナー",
-  "お知らせバナー",
-  "サブバナー",
-  "スプラッシュバナー",
-  "マイページバナー",
-  "メインバナー",
-  "ローテーションバナー",
-  "動画バナー",
-  "取材来店バナー",
-  "都道府県バナー",
+  ...allBannerTypes,
 ];
 
 const hourOptions = Array.from({ length: 24 }, (_, i) => ({
@@ -105,7 +95,7 @@ export function SlotCalendar({
   const [selectionEndDay, setSelectionEndDay] = useState<number | null>(null);
   const [startHour, setStartHour] = useState("13");
   const [endHour, setEndHour] = useState("14");
-  const [selectedBannerType, setSelectedBannerType] = useState<BannerType>("未定");
+  const [selectedBannerType, setSelectedBannerType] = useState<BannerType>("メインバナー");
 
   // Dragging
   const [isDragging, setIsDragging] = useState(false);
@@ -130,7 +120,7 @@ export function SlotCalendar({
     return slots;
   }, [prefectureFilter]);
 
-  // Filter bookings by status
+  // Filter bookings by status and banner type
   const getFilteredBookings = useCallback(
     (areaSlotId: string) => {
       const monthStart = startOfMonth(currentMonth);
@@ -144,9 +134,12 @@ export function SlotCalendar({
       if (statusFilter !== "すべて") {
         bookings = bookings.filter((b) => b.bookingStatus === statusFilter);
       }
+      if (bannerTypeFilter !== "すべて") {
+        bookings = bookings.filter((b) => b.bannerType === bannerTypeFilter);
+      }
       return bookings;
     },
-    [currentMonth, statusFilter]
+    [currentMonth, statusFilter, bannerTypeFilter]
   );
 
   // Check if a date is in the past
@@ -283,7 +276,7 @@ export function SlotCalendar({
     setSelectionEndDay(null);
     setSelectedAreaSlot(null);
     setDragAreaId(null);
-    setSelectedBannerType("未定");
+    setSelectedBannerType("メインバナー");
     setIsDialogOpen(false);
   };
 
@@ -527,8 +520,9 @@ export function SlotCalendar({
                               : "bg-amber-100 text-amber-800 border border-dashed border-amber-400"
                           )}
                           style={style}
+                          title={`${booking.bannerType} / ${booking.hallName}`}
                         >
-                          <span className="truncate">{booking.clientName}</span>
+                          <span className="truncate">{booking.bannerType} / {booking.hallName}</span>
                         </div>
                       );
                     })}
@@ -539,10 +533,20 @@ export function SlotCalendar({
                       return (
                         <div
                           key={slot.id}
-                          className="absolute bottom-1 h-[calc(50%-4px)] rounded-sm bg-red-100 border-2 border-red-500 text-red-700 text-xs flex items-center px-2 overflow-hidden z-10"
+                          className="absolute bottom-1 h-[calc(50%-4px)] rounded-sm bg-red-100 border-2 border-red-500 text-red-700 text-xs flex items-center gap-1 px-2 overflow-hidden z-10 group/bar"
                           style={style}
+                          title={`新規: ${slot.bannerType}`}
                         >
-                          <span className="truncate">新規案件</span>
+                          <span className="truncate">{slot.bannerType}</span>
+                          {!readOnly && (
+                            <button
+                              type="button"
+                              onClick={() => onRemoveSlot(slot.id)}
+                              className="shrink-0 opacity-0 group-hover/bar:opacity-100 transition-opacity hover:text-red-900"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          )}
                         </div>
                       );
                     })}
@@ -612,15 +616,19 @@ export function SlotCalendar({
 
             {/* エリア行（日表示） */}
             {filteredAreaSlots.map((areaSlot) => {
-              const bookings = mockBookings.filter(
+              let dayBookings = mockBookings.filter(
                 (b) =>
                   b.areaSlotId === areaSlot.id &&
                   !isAfter(b.startDate, selectedDay) &&
                   !isBefore(b.endDate, selectedDay)
               );
-              const filteredDayBookings = statusFilter !== "すべて"
-                ? bookings.filter((b) => b.bookingStatus === statusFilter)
-                : bookings;
+              if (statusFilter !== "すべて") {
+                dayBookings = dayBookings.filter((b) => b.bookingStatus === statusFilter);
+              }
+              if (bannerTypeFilter !== "すべて") {
+                dayBookings = dayBookings.filter((b) => b.bannerType === bannerTypeFilter);
+              }
+              const filteredDayBookings = dayBookings;
               const proposals = selectedSlots.filter(
                 (s) =>
                   s.areaSlotId === areaSlot.id &&
@@ -664,8 +672,9 @@ export function SlotCalendar({
                               : "bg-amber-100 text-amber-800 border border-dashed border-amber-400"
                           )}
                           style={{ left, width }}
+                          title={`${booking.bannerType} / ${booking.hallName}`}
                         >
-                          <span className="truncate">{booking.clientName}</span>
+                          <span className="truncate">{booking.bannerType} / {booking.hallName}</span>
                         </div>
                       );
                     })}
@@ -679,10 +688,20 @@ export function SlotCalendar({
                       return (
                         <div
                           key={slot.id}
-                          className="absolute bottom-1 h-[calc(50%-4px)] rounded-sm bg-red-100 border-2 border-red-500 text-red-700 text-xs flex items-center px-2 overflow-hidden z-10"
+                          className="absolute bottom-1 h-[calc(50%-4px)] rounded-sm bg-red-100 border-2 border-red-500 text-red-700 text-xs flex items-center gap-1 px-2 overflow-hidden z-10 group/bar"
                           style={{ left, width }}
+                          title={`新規: ${slot.bannerType}`}
                         >
-                          <span className="truncate">新規案件</span>
+                          <span className="truncate">{slot.bannerType}</span>
+                          {!readOnly && (
+                            <button
+                              type="button"
+                              onClick={() => onRemoveSlot(slot.id)}
+                              className="shrink-0 opacity-0 group-hover/bar:opacity-100 transition-opacity hover:text-red-900"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          )}
                         </div>
                       );
                     })}
@@ -711,6 +730,12 @@ export function SlotCalendar({
             <span className="h-3 w-6 rounded-sm border-2 border-dashed border-amber-400 bg-amber-50" />
             <span>AI推奨枠</span>
           </div>
+          {!readOnly && (
+            <div className="flex items-center gap-1.5 ml-auto text-blue-600">
+              <MousePointerClick className="h-3.5 w-3.5" />
+              <span>カレンダー上をドラッグして枠を追加</span>
+            </div>
+          )}
         </div>
       </div>
 

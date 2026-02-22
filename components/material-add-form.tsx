@@ -89,9 +89,16 @@ function createEmptyMaterial(id: string): MaterialFormItem {
 }
 
 const bannerTypeMap: Record<string, BannerType> = {
-  trinity: "メインバナー",
-  campaign: "サブバナー",
-  seasonal: "お知らせバナー",
+  "【FP課】マイページバナー": "【FP課】マイページバナー",
+  "お知らせバナー": "お知らせバナー",
+  "サブバナー": "サブバナー",
+  "スプラッシュバナー": "スプラッシュバナー",
+  "マイページバナー": "マイページバナー",
+  "メインバナー": "メインバナー",
+  "ローテーションバナー": "ローテーションバナー",
+  "動画バナー": "動画バナー",
+  "取材来店バナー": "取材来店バナー",
+  "都道府県バナー": "都道府県バナー",
 };
 
 export function MaterialAddForm({ caseId, onBack }: MaterialAddFormProps) {
@@ -220,11 +227,16 @@ export function MaterialAddForm({ caseId, onBack }: MaterialAddFormProps) {
                         <SelectValue placeholder="イベント区分を検索..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="trinity">
-                          トリニティガール
-                        </SelectItem>
-                        <SelectItem value="campaign">キャンペーン</SelectItem>
-                        <SelectItem value="seasonal">季節イベント</SelectItem>
+                        <SelectItem value="【FP課】マイページバナー">【FP課】マイページバナー</SelectItem>
+                        <SelectItem value="お知らせバナー">お知らせバナー</SelectItem>
+                        <SelectItem value="サブバナー">サブバナー</SelectItem>
+                        <SelectItem value="スプラッシュバナー">スプラッシュバナー</SelectItem>
+                        <SelectItem value="マイページバナー">マイページバナー</SelectItem>
+                        <SelectItem value="メインバナー">メインバナー</SelectItem>
+                        <SelectItem value="ローテーションバナー">ローテーションバナー</SelectItem>
+                        <SelectItem value="動画バナー">動画バナー</SelectItem>
+                        <SelectItem value="取材来店バナー">取材来店バナー</SelectItem>
+                        <SelectItem value="都道府県バナー">都道府県バナー</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

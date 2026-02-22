@@ -33,7 +33,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { mockCorporations } from "@/lib/types";
+import { initialCompanies, initialHalls, mockAreaSlots, type CaseStatus } from "@/lib/types";
 
 interface CaseListProps {
   onSelectCase: (caseId: string) => void;
@@ -54,6 +54,8 @@ export function CaseList({ onSelectCase, onOpenCreateForm, onAddMaterial }: Case
   const [searchConditions, setSearchConditions] = useState({
     corporate: "",
     hall: "",
+    area: "",
+    status: "",
     category: "",
     event: "",
     dateStart: "",
@@ -63,10 +65,26 @@ export function CaseList({ onSelectCase, onOpenCreateForm, onAddMaterial }: Case
     caseName: "",
   });
 
+  const areaGroups = [...new Set(mockAreaSlots.map((s) => s.areaGroup))];
+
+  const statusOptions: CaseStatus[] = [
+    "提案中",
+    "配信準備中",
+    "事務確認中",
+    "差し戻し",
+    "掲載中",
+    "見送り",
+    "却下",
+    "掲載停止依頼中",
+    "掲載停止",
+  ];
+
   const clearSearch = () => {
     setSearchConditions({
       corporate: "",
       hall: "",
+      area: "",
+      status: "",
       category: "",
       event: "",
       dateStart: "",
@@ -132,8 +150,8 @@ export function CaseList({ onSelectCase, onOpenCreateForm, onAddMaterial }: Case
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">すべて</SelectItem>
-                  {mockCorporations.map((corp) => (
-                    <SelectItem key={corp.id} value={corp.id}>
+                  {initialCompanies.map((corp) => (
+                    <SelectItem key={String(corp.id)} value={String(corp.id)}>
                       {corp.name}
                     </SelectItem>
                   ))}
@@ -154,11 +172,53 @@ export function CaseList({ onSelectCase, onOpenCreateForm, onAddMaterial }: Case
                 <SelectContent>
                   <SelectItem value="all">すべて</SelectItem>
                   {(searchConditions.corporate && searchConditions.corporate !== "all"
-                    ? mockCorporations.find((c) => c.id === searchConditions.corporate)?.stores || []
-                    : mockCorporations.flatMap((c) => c.stores)
-                  ).map((store) => (
-                    <SelectItem key={store.id} value={store.id}>
-                      {store.name}
+                    ? initialHalls.filter((h) => h.companyId === Number(searchConditions.corporate))
+                    : initialHalls
+                  ).map((hall) => (
+                    <SelectItem key={String(hall.id)} value={String(hall.id)}>
+                      {hall.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* 部やエリア */}
+            <div className="space-y-2">
+              <Label className="text-xs font-bold">部やエリア</Label>
+              <Select 
+                value={searchConditions.area} 
+                onValueChange={(val) => setSearchConditions({...searchConditions, area: val})}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="エリアを選択..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">すべて</SelectItem>
+                  {areaGroups.map((group) => (
+                    <SelectItem key={group} value={group}>
+                      {group}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* ステータス */}
+            <div className="space-y-2">
+              <Label className="text-xs font-bold">ステータス</Label>
+              <Select 
+                value={searchConditions.status} 
+                onValueChange={(val) => setSearchConditions({...searchConditions, status: val})}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="ステータスを選択..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">すべて</SelectItem>
+                  {statusOptions.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -194,8 +254,16 @@ export function CaseList({ onSelectCase, onOpenCreateForm, onAddMaterial }: Case
                   <SelectValue placeholder="イベント区分を検索..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="event1">イベント1</SelectItem>
-                  <SelectItem value="event2">イベント2</SelectItem>
+                  <SelectItem value="【FP課】マイページバナー">【FP課】マイページバナー</SelectItem>
+                  <SelectItem value="お知らせバナー">お知らせバナー</SelectItem>
+                  <SelectItem value="サブバナー">サブバナー</SelectItem>
+                  <SelectItem value="スプラッシュバナー">スプラッシュバナー</SelectItem>
+                  <SelectItem value="マイページバナー">マイページバナー</SelectItem>
+                  <SelectItem value="メインバナー">メインバナー</SelectItem>
+                  <SelectItem value="ローテーションバナー">ローテーションバナー</SelectItem>
+                  <SelectItem value="動画バナー">動画バナー</SelectItem>
+                  <SelectItem value="取材来店バナー">取材来店バナー</SelectItem>
+                  <SelectItem value="都道府県バナー">都道府県バナー</SelectItem>
                 </SelectContent>
               </Select>
             </div>

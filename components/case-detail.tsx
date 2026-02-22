@@ -64,7 +64,13 @@ import { useCaseStore } from "@/lib/case-store";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import type { Case, ProposalSlot, MaterialFile } from "@/lib/types";
-import { mockCorporations, mockAnniversaryPacks } from "@/lib/types";
+import {
+  mockAnniversaryPacks,
+  initialCompanies,
+  initialHalls,
+} from "@/lib/types";
+import type { CompanyData, HallData } from "@/lib/types";
+import { CompanyHallCombobox } from "@/components/company-hall-combobox";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 
@@ -100,6 +106,7 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
     proceedToPublishing,
     skipProposal,
     confirmStopPublishing,
+    requestStopPublishing,
     approveCase,
     rejectCase,
     viewMode,
@@ -112,6 +119,15 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
   const [requestDate, setRequestDate] = useState(
     format(caseData.createdAt, "yyyy-MM-dd")
   );
+
+  const matchedCompany = initialCompanies.find(
+    (c) => c.name === caseData.corporateName
+  ) ?? null;
+  const matchedHall = initialHalls.find(
+    (h) => h.name === caseData.storeName && (matchedCompany ? h.companyId === matchedCompany.id : true)
+  ) ?? null;
+  const [selectedCompany, setSelectedCompany] = useState<CompanyData | null>(matchedCompany);
+  const [selectedHall, setSelectedHall] = useState<HallData | null>(matchedHall);
 
   const [showSkipDialog, setShowSkipDialog] = useState(false);
   const [showProceedDialog, setShowProceedDialog] = useState(false);
@@ -162,13 +178,13 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
     }
   })();
 
-  // 法人IDから周年パック取得
-  const corpForPacks = mockCorporations.find(
-    (c) => c.name === caseData.corporateName
-  );
-  const corporationPacks = corpForPacks
+  // 法人IDから周年パック取得（mockAnniversaryPacksのcorporationIdは旧形式"corp-1"等）
+  const legacyCorporationId = selectedCompany
+    ? `corp-${selectedCompany.id}`
+    : null;
+  const corporationPacks = legacyCorporationId
     ? mockAnniversaryPacks
-        .filter((p) => p.corporationId === corpForPacks.id)
+        .filter((p) => p.corporationId === legacyCorporationId)
         .sort(
           (a, b) => a.expiryDate.getTime() - b.expiryDate.getTime()
         )
@@ -302,7 +318,12 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
   };
 
   const handleStopPublishing = () => {
-    confirmStopPublishing(caseData.id);
+    if (isAdmin) {
+      confirmStopPublishing(caseData.id);
+    } else {
+      const reason = stopReason || generateStopRequestText();
+      requestStopPublishing(caseData.id, reason);
+    }
     setShowStopDialog(false);
     setStopReason("");
   };
@@ -320,14 +341,9 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
     }
   };
 
-  const corpIndex = mockCorporations.findIndex(
-    (c) => c.name === caseData.corporateName
-  );
-  const corpId =
-    corpIndex >= 0
-      ? `CORP-${String(corpIndex + 10).padStart(3, "0")}`
-      : "CORP-001";
-  const hallId = `${corpId}-HALL-03`;
+  const corpId = selectedCompany?.companyId ?? "";
+  const hallId = selectedHall?.hallId ?? "";
+  const hallSalesPerson = selectedHall?.salesPersonName ?? "";
 
   return (
     <div className="space-y-6">
@@ -371,46 +387,29 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
       <Card className="p-6">
         <h2 className="text-lg font-bold mb-6">基本情報</h2>
         <div className="space-y-5">
+          {/* 法人名・ホール名（コンボボックス） */}
+          <div className="space-y-2">
+            <Label className="text-sm">法人名・ホール名</Label>
+            <CompanyHallCombobox
+              selectedCompany={selectedCompany}
+              selectedHall={selectedHall}
+              onSelectCompany={setSelectedCompany}
+              onSelectHall={setSelectedHall}
+            />
+          </div>
+
+          {/* 法人ID / ホールID */}
           <div className="grid grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label className="text-sm">法人名</Label>
-              <Select defaultValue={caseData.corporateName}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {mockCorporations.map((corp) => (
-                    <SelectItem key={corp.id} value={corp.name}>
-                      {corp.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
             <div className="space-y-2">
               <Label className="text-sm">法人ID</Label>
               <Input value={corpId} readOnly className="bg-muted/30" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label className="text-sm">ホール名</Label>
-              <Select defaultValue={caseData.storeName}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={caseData.storeName}>
-                    {caseData.storeName}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
             </div>
             <div className="space-y-2">
               <Label className="text-sm">ホールID</Label>
               <Input value={hallId} readOnly className="bg-muted/30" />
             </div>
           </div>
+
           <div className="space-y-2">
             <Label className="text-sm">案件名</Label>
             <Input
@@ -422,8 +421,13 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
             <div className="space-y-2">
               <Label className="text-sm">ホール担当営業</Label>
               <Input
-                value={staffName}
-                onChange={(e) => setStaffName(e.target.value)}
+                placeholder="ホールを選択すると自動入力されます"
+                value={hallSalesPerson || staffName}
+                readOnly={!!hallSalesPerson}
+                className={hallSalesPerson ? "bg-muted/30" : ""}
+                onChange={(e) => {
+                  if (!hallSalesPerson) setStaffName(e.target.value);
+                }}
               />
             </div>
             <div className="space-y-2">
@@ -520,7 +524,6 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
                             <SelectValue placeholder="選択してください" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="未定">未定</SelectItem>
                             <SelectItem value="【FP課】マイページバナー">【FP課】マイページバナー</SelectItem>
                             <SelectItem value="お知らせバナー">お知らせバナー</SelectItem>
                             <SelectItem value="サブバナー">サブバナー</SelectItem>
@@ -714,6 +717,14 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
 
                     {/* ===== ステップ1 提案 ===== */}
                     <TabsContent value="proposal" className="space-y-6 mt-6">
+                      {isAdmin ? (
+                        <div className="flex items-center justify-center py-12">
+                          <p className="text-muted-foreground text-sm">
+                            事務側にはステップ1の内容はありません
+                          </p>
+                        </div>
+                      ) : (
+                      <>
                       {/* 提案内容 - 掲載日時とバナー種別 */}
                       <div className="space-y-2">
                         <Label className="text-base font-medium">
@@ -795,6 +806,8 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
                           </div>
                         </div>
                       </Card>
+                      </>
+                      )}
                     </TabsContent>
 
                     {/* ===== ステップ2 掲載 ===== */}
@@ -937,6 +950,35 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
                                 </Badge>
                               )}
                             </div>
+                          )}
+
+                          {/* 掲載停止セクション（営業から掲載停止依頼があった場合） */}
+                          {caseData.status === "掲載停止依頼中" && caseData.stopPublishingRequest && (
+                            <Card className="border-orange-200 bg-orange-50">
+                              <div className="p-6 space-y-4">
+                                <div>
+                                  <h3 className="text-base font-semibold text-orange-800">
+                                    掲載停止依頼
+                                  </h3>
+                                  <p className="text-sm text-orange-700">
+                                    営業から掲載停止の依頼が届いています
+                                  </p>
+                                </div>
+                                <div className="rounded-lg border border-orange-200 bg-white p-4">
+                                  <h4 className="text-sm font-medium mb-2">営業からの依頼内容</h4>
+                                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                                    {caseData.stopPublishingRequest}
+                                  </p>
+                                </div>
+                                <Button
+                                  variant="destructive"
+                                  onClick={() => setShowStopDialog(true)}
+                                >
+                                  <StopCircle className="mr-2 h-4 w-4" />
+                                  掲載を停止する
+                                </Button>
+                              </div>
+                            </Card>
                           )}
                         </>
                       ) : (
@@ -1197,56 +1239,79 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
       {/* 掲載停止確認 */}
       <Dialog open={showStopDialog} onOpenChange={setShowStopDialog}>
         <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>本当に掲載停止してよろしいですか？</DialogTitle>
-            <DialogDescription>
-              以下の内容が実行されます。この操作は取り消せません。
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            {/* 削除・解放される内容 */}
-            <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-              <div className="space-y-2 text-sm">
-                <div className="flex items-start gap-2">
-                  <StopCircle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
-                  <span>管理画面の掲載設定を<span className="font-semibold text-red-600">削除</span>します</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <Calendar className="h-4 w-4 text-orange-500 mt-0.5 flex-shrink-0" />
-                  <span>カレンダーの掲載枠を<span className="font-semibold text-orange-600">解放</span>します</span>
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="text-sm text-muted-foreground space-y-1">
-                <p><span className="font-medium text-foreground">案件ID:</span> {caseData.id}</p>
-                <p><span className="font-medium text-foreground">法人名:</span> {caseData.corporateName}</p>
-                <p><span className="font-medium text-foreground">店舗名:</span> {caseData.storeName}</p>
-                {caseData.proposalSlots.length > 0 && (
-                  <div>
-                    <p className="font-medium text-foreground mb-1">対象掲載枠:</p>
-                    {caseData.proposalSlots.map((s) => (
-                      <p key={s.id} className="ml-3">
-                        {s.areaName || "未設定"} / {format(s.startDate, "yyyy/MM/dd", { locale: ja })} 〜 {format(s.endDate, "yyyy/MM/dd", { locale: ja })} ({s.bannerType})
-                      </p>
-                    ))}
+          {isAdmin ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>本当に掲載停止してよろしいですか？</DialogTitle>
+                <DialogDescription>
+                  掲載を停止すると、管理画面の設定を削除しカレンダーの枠を解放します
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowStopDialog(false)}
+                >
+                  キャンセル
+                </Button>
+                <Button variant="destructive" onClick={handleStopPublishing}>
+                  掲載を停止する
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>本当に掲載停止してよろしいですか？</DialogTitle>
+                <DialogDescription>
+                  以下の内容が実行されます。この操作は取り消せません。
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-start gap-2">
+                      <StopCircle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
+                      <span>管理画面の掲載設定を<span className="font-semibold text-red-600">削除</span>します</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <Calendar className="h-4 w-4 text-orange-500 mt-0.5 flex-shrink-0" />
+                      <span>カレンダーの掲載枠を<span className="font-semibold text-orange-600">解放</span>します</span>
+                    </div>
                   </div>
-                )}
+
+                  <Separator />
+
+                  <div className="text-sm text-muted-foreground space-y-1">
+                    <p><span className="font-medium text-foreground">案件ID:</span> {caseData.id}</p>
+                    <p><span className="font-medium text-foreground">法人名:</span> {caseData.corporateName}</p>
+                    <p><span className="font-medium text-foreground">店舗名:</span> {caseData.storeName}</p>
+                    {caseData.proposalSlots.length > 0 && (
+                      <div>
+                        <p className="font-medium text-foreground mb-1">対象掲載枠:</p>
+                        {caseData.proposalSlots.map((s) => (
+                          <p key={s.id} className="ml-3">
+                            {s.areaName || "未設定"} / {format(s.startDate, "yyyy/MM/dd", { locale: ja })} 〜 {format(s.endDate, "yyyy/MM/dd", { locale: ja })} ({s.bannerType})
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowStopDialog(false)}
-            >
-              キャンセル
-            </Button>
-            <Button variant="destructive" onClick={handleStopPublishing}>
-              掲載を停止する
-            </Button>
-          </DialogFooter>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowStopDialog(false)}
+                >
+                  キャンセル
+                </Button>
+                <Button variant="destructive" onClick={handleStopPublishing}>
+                  掲載を停止する
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
