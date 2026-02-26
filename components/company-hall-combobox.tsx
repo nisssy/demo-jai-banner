@@ -62,12 +62,15 @@ export function CompanyHallCombobox({
     if (selectedCompany?.id === company.id) {
       onSelectCompany(null)
       onSelectHall(null)
+      setQuery("")
+      setOpen(false)
     } else {
       onSelectCompany(company)
       onSelectHall(null)
+      setQuery("")
+      // 法人選択後、ホールタブに自動切替して続けて選択できるようにする
+      setSearchMode("hall")
     }
-    setQuery("")
-    setOpen(false)
   }
 
   const handleSelectHall = (hall: HallData) => {

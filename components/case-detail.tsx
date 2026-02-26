@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,6 +60,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { SlotCalendar } from "@/components/slot-calendar";
 import { ApplicationUpload } from "@/components/application-upload";
 import { MaterialUpload } from "@/components/material-upload";
+import { CaseChat } from "@/components/case-chat";
 import { useCaseStore } from "@/lib/case-store";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
@@ -68,6 +69,7 @@ import {
   mockAnniversaryPacks,
   initialCompanies,
   initialHalls,
+  findOverlappingSlots,
 } from "@/lib/types";
 import type { CompanyData, HallData } from "@/lib/types";
 import { CompanyHallCombobox } from "@/components/company-hall-combobox";
@@ -97,6 +99,7 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
   const {
     addProposalSlot,
     removeProposalSlot,
+    updateProposalSlot,
     updateCase,
     addMaterial,
     removeMaterial,
@@ -129,6 +132,25 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
   const [selectedCompany, setSelectedCompany] = useState<CompanyData | null>(matchedCompany);
   const [selectedHall, setSelectedHall] = useState<HallData | null>(matchedHall);
 
+  // 法人名・ホール名の変更をストアに同期
+  const isInitialMount = useRef(true);
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    const updates: Partial<Case> = {};
+    if (selectedCompany && selectedCompany.name !== caseData.corporateName) {
+      updates.corporateName = selectedCompany.name;
+    }
+    if (selectedHall && selectedHall.name !== caseData.storeName) {
+      updates.storeName = selectedHall.name;
+    }
+    if (Object.keys(updates).length > 0) {
+      updateCase(caseData.id, updates);
+    }
+  }, [selectedCompany, selectedHall]);
+
   const [showSkipDialog, setShowSkipDialog] = useState(false);
   const [showProceedDialog, setShowProceedDialog] = useState(false);
   const [showStopDialog, setShowStopDialog] = useState(false);
@@ -150,6 +172,8 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
 
   const handleApprove = () => {
     approveCase(caseData.id);
+    startPublishing(caseData.id);
+    onBack();
   };
 
   const handleReject = () => {
@@ -216,9 +240,26 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
     id: string,
     updates: Partial<MaterialState>
   ) => {
-    setMaterialStates((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, ...updates } : m))
-    );
+    setMaterialStates((prev) => {
+      const newStates = prev.map((m) => (m.id === id ? { ...m, ...updates } : m));
+
+      // 請求額・周年パック情報をストアに同期
+      if ("billingAmount" in updates || "usageMethod" in updates || "selectedPackId" in updates) {
+        const totalBilling = newStates.reduce((sum, m) => {
+          const amount = m.billingAmount ? Number(m.billingAmount) : 0;
+          return sum + amount;
+        }, 0);
+        const hasAnniversary = newStates.some((m) => m.usageMethod === "anniversary");
+        const anniversaryPackId = newStates.find((m) => m.selectedPackId)?.selectedPackId;
+        updateCase(caseData.id, {
+          billingAmount: totalBilling || undefined,
+          isAnniversaryPack: hasAnniversary || undefined,
+          anniversaryPackCode: anniversaryPackId || undefined,
+        });
+      }
+
+      return newStates;
+    });
   };
 
   const handleAddMaterial = () => {
@@ -257,11 +298,64 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
     removeProposalSlot(caseData.id, slotId);
   };
 
+  const handleUpdateSlot = (slotId: string, updates: Partial<ProposalSlot>) => {
+    // 日付変更時に重複チェック
+    if (updates.startDate || updates.endDate) {
+      const currentSlot = caseData.proposalSlots.find((s) => s.id === slotId);
+      if (currentSlot) {
+        const newStart = updates.startDate || currentSlot.startDate;
+        const newEnd = updates.endDate || currentSlot.endDate;
+        const overlapping = findOverlappingSlots(
+          caseData.proposalSlots,
+          newStart,
+          newEnd,
+          slotId
+        );
+        if (overlapping.length > 0) {
+          alert("他の枠と日程が重複しています。別の日程を選択してください。");
+          return;
+        }
+      }
+    }
+    updateProposalSlot(caseData.id, slotId, updates);
+  };
+
+  const handleAddSlotFromMaterial = () => {
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const newSlot: ProposalSlot = {
+      id: `slot-${Date.now()}`,
+      startDate: today,
+      endDate: tomorrow,
+      bannerType: "バナー各種",
+    };
+
+    // 重複チェック
+    const overlapping = findOverlappingSlots(
+      caseData.proposalSlots,
+      newSlot.startDate,
+      newSlot.endDate
+    );
+    if (overlapping.length > 0) {
+      alert("デフォルトの日程が既存枠と重複しています。追加後に日程を調整してください。");
+    }
+
+    addProposalSlot(caseData.id, newSlot);
+  };
+
   const handleSavePolicy = (materialId: string) => {
     const ms = materialStates.find((m) => m.id === materialId);
     if (ms) {
       updateCase(caseData.id, { implementationPolicy: ms.implementationPolicy });
     }
+  };
+
+  const handleRegisterProposal = (materialId: string) => {
+    handleSavePolicy(materialId);
+    updateCase(caseData.id, { status: "提案中" });
+    onBack();
   };
 
   const handleProceed = () => {
@@ -524,16 +618,7 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
                             <SelectValue placeholder="選択してください" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="【FP課】マイページバナー">【FP課】マイページバナー</SelectItem>
-                            <SelectItem value="お知らせバナー">お知らせバナー</SelectItem>
-                            <SelectItem value="サブバナー">サブバナー</SelectItem>
-                            <SelectItem value="スプラッシュバナー">スプラッシュバナー</SelectItem>
-                            <SelectItem value="マイページバナー">マイページバナー</SelectItem>
-                            <SelectItem value="メインバナー">メインバナー</SelectItem>
-                            <SelectItem value="ローテーションバナー">ローテーションバナー</SelectItem>
-                            <SelectItem value="動画バナー">動画バナー</SelectItem>
-                            <SelectItem value="取材来店バナー">取材来店バナー</SelectItem>
-                            <SelectItem value="都道府県バナー">都道府県バナー</SelectItem>
+                            <SelectItem value="バナー各種">バナー各種</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -704,8 +789,9 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
                     )}
                   </div>
 
-                  {/* ===== Step1/Step2 タブ ===== */}
-                  <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                  {/* ===== Step1/Step2 タブ + チャット ===== */}
+                  <div className="flex gap-6">
+                  <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-w-0">
                     <TabsList className="w-full grid grid-cols-2">
                       <TabsTrigger value="proposal">
                         ステップ1 提案
@@ -741,15 +827,15 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
                         />
                       </div>
 
-                      {/* フッターボタン（登録/キャンセル） */}
+                      {/* フッターボタン（提案内容を登録/キャンセル） */}
                       <div className="flex justify-end gap-3 pt-4 border-t">
                         <Button variant="outline" onClick={onBack}>
                           キャンセル
                         </Button>
                         <Button
-                          onClick={() => handleSavePolicy(material.id)}
+                          onClick={() => handleRegisterProposal(material.id)}
                         >
-                          登録
+                          提案内容を登録
                         </Button>
                       </div>
 
@@ -858,48 +944,27 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
                             </div>
                           </Card>
 
-                          {/* 掲載内容（カレンダーUI・読み取り専用） */}
+                          {/* 掲載内容（カレンダーUI・編集可能） */}
                           <Card className="border">
                             <div className="p-6 space-y-4">
                               <div>
                                 <h3 className="text-base font-semibold">掲載内容</h3>
                                 <p className="text-sm text-muted-foreground">
-                                  営業が入力した掲載日程とバナー種別
+                                  掲載日程とバナー種別を編集できます
                                 </p>
                               </div>
-                              {thisSlot && (
-                                <div className="space-y-2">
-                                  <h4 className="text-sm font-medium flex items-center gap-2">
-                                    <Calendar className="h-4 w-4" />
-                                    選択された提案日程
-                                  </h4>
-                                  <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
-                                    <p className="text-sm font-medium">
-                                      {format(thisSlot.startDate, "yyyy/MM/dd", { locale: ja })}
-                                      {thisSlot.startTime && ` ${thisSlot.startTime}`}
-                                      {" - "}
-                                      {format(thisSlot.endDate, "yyyy/MM/dd", { locale: ja })}
-                                      {thisSlot.endTime && ` ${thisSlot.endTime}`}
-                                    </p>
-                                    <Badge className={getBannerTypeColor(thisSlot.bannerType)}>
-                                      {thisSlot.bannerType}
-                                    </Badge>
-                                  </div>
-                                </div>
-                              )}
                               <SlotCalendar
-                                selectedSlots={thisSlot ? [thisSlot] : []}
-                                onAddSlot={() => {}}
-                                onRemoveSlot={() => {}}
-                                readOnly={true}
+                                selectedSlots={caseData.proposalSlots}
+                                onAddSlot={handleAddSlot}
+                                onRemoveSlot={handleRemoveSlot}
                               />
                             </div>
                           </Card>
 
                           {/* 掲載素材（読み取り専用） */}
                           <MaterialUpload
-                            materials={slotMaterials}
-                            proposalSlots={thisSlot ? [thisSlot] : []}
+                            materials={caseData.materials || []}
+                            proposalSlots={caseData.proposalSlots}
                             onAddMaterial={() => {}}
                             onRemoveMaterial={() => {}}
                             readOnly={true}
@@ -925,7 +990,7 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
                                   className="bg-green-600 hover:bg-green-700 text-white"
                                 >
                                   <Check className="mr-2 h-4 w-4" />
-                                  承認
+                                  承認して掲載を開始
                                 </Button>
                               </div>
                             </div>
@@ -1048,55 +1113,27 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
                                   掲載内容
                                 </h3>
                                 <p className="text-sm text-muted-foreground">
-                                  提案時に入力した掲載日程とバナー種別
+                                  掲載日程とバナー種別を編集できます
                                 </p>
                               </div>
 
-                              {thisSlot && (
-                                <div className="space-y-2">
-                                  <h4 className="text-sm font-medium flex items-center gap-2">
-                                    <Calendar className="h-4 w-4" />
-                                    選択された提案日程
-                                  </h4>
-                                  <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
-                                    <p className="text-sm font-medium">
-                                      {format(thisSlot.startDate, "yyyy/MM/dd", {
-                                        locale: ja,
-                                      })}
-                                      {thisSlot.startTime &&
-                                        ` ${thisSlot.startTime}`}
-                                      {" - "}
-                                      {format(thisSlot.endDate, "yyyy/MM/dd", {
-                                        locale: ja,
-                                      })}
-                                      {thisSlot.endTime && ` ${thisSlot.endTime}`}
-                                    </p>
-                                    <Badge
-                                      className={getBannerTypeColor(
-                                        thisSlot.bannerType
-                                      )}
-                                    >
-                                      {thisSlot.bannerType}
-                                    </Badge>
-                                  </div>
-                                </div>
-                              )}
-
                               <SlotCalendar
-                                selectedSlots={thisSlot ? [thisSlot] : []}
-                                onAddSlot={() => {}}
-                                onRemoveSlot={() => {}}
-                                readOnly={true}
+                                selectedSlots={caseData.proposalSlots}
+                                onAddSlot={handleAddSlot}
+                                onRemoveSlot={handleRemoveSlot}
                               />
                             </div>
                           </Card>
 
                           {/* 掲載素材 */}
                           <MaterialUpload
-                            materials={slotMaterials}
-                            proposalSlots={thisSlot ? [thisSlot] : []}
+                            materials={caseData.materials || []}
+                            proposalSlots={caseData.proposalSlots}
                             onAddMaterial={handleAddMaterialFile}
                             onRemoveMaterial={handleRemoveMaterialFile}
+                            onAddSlot={handleAddSlotFromMaterial}
+                            onUpdateSlot={handleUpdateSlot}
+                            onRemoveSlot={handleRemoveSlot}
                             readOnly={isReviewPending}
                             deadlineText="最終期限は1営業日前の15時必着。動画の期限は6営業日前"
                           />
@@ -1169,6 +1206,10 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
                       )}
                     </TabsContent>
                   </Tabs>
+                  <div className="w-[320px] flex-shrink-0">
+                    <CaseChat caseData={caseData} slotId={material.id} />
+                  </div>
+                  </div>
                 </div>
               </CollapsibleContent>
             </Collapsible>

@@ -4,7 +4,8 @@ import React, { useState, useRef, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Upload, X, FileImage, AlertCircle, Check, Sparkles, ChevronLeft, ChevronRight, Download, ZoomIn } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Upload, X, FileImage, AlertCircle, Check, Sparkles, ChevronLeft, ChevronRight, Download, ZoomIn, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { MaterialFile, ProposalSlot } from "@/lib/types";
 import { format } from "date-fns";
@@ -15,6 +16,9 @@ interface MaterialUploadProps {
   proposalSlots?: ProposalSlot[];
   onAddMaterial: (material: MaterialFile) => void;
   onRemoveMaterial: (materialId: string) => void;
+  onAddSlot?: () => void;
+  onUpdateSlot?: (slotId: string, updates: Partial<ProposalSlot>) => void;
+  onRemoveSlot?: (slotId: string) => void;
   readOnly?: boolean;
   deadlineText?: string;
 }
@@ -80,6 +84,8 @@ function SlotUploadRow({
   onAddMaterial,
   onRemoveMaterial,
   onPreview,
+  onUpdateSlot,
+  onRemoveSlot,
   readOnly,
 }: {
   slot: ProposalSlot;
@@ -87,6 +93,8 @@ function SlotUploadRow({
   onAddMaterial: (material: MaterialFile) => void;
   onRemoveMaterial: (materialId: string) => void;
   onPreview: (materialId: string) => void;
+  onUpdateSlot?: (slotId: string, updates: Partial<ProposalSlot>) => void;
+  onRemoveSlot?: (slotId: string) => void;
   readOnly: boolean;
 }) {
   const [isDragging, setIsDragging] = useState(false);
@@ -119,24 +127,70 @@ function SlotUploadRow({
         <div className="grid grid-cols-4 gap-3 flex-1">
           <div>
             <p className="text-xs text-muted-foreground mb-0.5">掲載開始日</p>
-            <p className="text-sm font-medium">
-              {format(slot.startDate, "yyyy-MM-dd", { locale: ja })}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground mb-0.5">開始時刻</p>
-            <p className="text-sm font-medium">{slot.startTime || "00:00"}</p>
+            {!readOnly && onUpdateSlot ? (
+              <Input
+                type="date"
+                value={format(slot.startDate, "yyyy-MM-dd")}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val) onUpdateSlot(slot.id, { startDate: new Date(val + "T00:00:00") });
+                }}
+                className="h-7 text-sm w-[140px]"
+              />
+            ) : (
+              <p className="text-sm font-medium">
+                {format(slot.startDate, "yyyy-MM-dd", { locale: ja })}
+              </p>
+            )}
           </div>
           <div>
             <p className="text-xs text-muted-foreground mb-0.5">掲載終了日</p>
-            <p className="text-sm font-medium">
-              {format(slot.endDate, "yyyy-MM-dd", { locale: ja })}
-            </p>
+            {!readOnly && onUpdateSlot ? (
+              <Input
+                type="date"
+                value={format(slot.endDate, "yyyy-MM-dd")}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val) onUpdateSlot(slot.id, { endDate: new Date(val + "T00:00:00") });
+                }}
+                className="h-7 text-sm w-[140px]"
+              />
+            ) : (
+              <p className="text-sm font-medium">
+                {format(slot.endDate, "yyyy-MM-dd", { locale: ja })}
+              </p>
+            )}
           </div>
-          <div>
-            <p className="text-xs text-muted-foreground mb-0.5">終了時刻</p>
-            <p className="text-sm font-medium">{slot.endTime || "23:59"}</p>
-          </div>
+          {onUpdateSlot && (
+            <>
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">開始時刻</p>
+                {!readOnly ? (
+                  <Input
+                    type="time"
+                    value={slot.startTime || ""}
+                    onChange={(e) => onUpdateSlot(slot.id, { startTime: e.target.value })}
+                    className="h-7 text-sm w-[120px]"
+                  />
+                ) : (
+                  <p className="text-sm font-medium">{slot.startTime || "—"}</p>
+                )}
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">終了時刻</p>
+                {!readOnly ? (
+                  <Input
+                    type="time"
+                    value={slot.endTime || ""}
+                    onChange={(e) => onUpdateSlot(slot.id, { endTime: e.target.value })}
+                    className="h-7 text-sm w-[120px]"
+                  />
+                ) : (
+                  <p className="text-sm font-medium">{slot.endTime || "—"}</p>
+                )}
+              </div>
+            </>
+          )}
         </div>
         <Badge variant="secondary" className="flex-shrink-0">
           {slot.bannerType}
@@ -145,6 +199,16 @@ function SlotUploadRow({
           <Badge variant="outline" className="flex-shrink-0">
             {slot.areaName}
           </Badge>
+        )}
+        {!readOnly && onRemoveSlot && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 flex-shrink-0 text-muted-foreground hover:text-red-600"
+            onClick={() => onRemoveSlot(slot.id)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
         )}
       </div>
 
@@ -279,6 +343,9 @@ export function MaterialUpload({
   proposalSlots,
   onAddMaterial,
   onRemoveMaterial,
+  onAddSlot,
+  onUpdateSlot,
+  onRemoveSlot,
   readOnly = false,
   deadlineText,
 }: MaterialUploadProps) {
@@ -357,17 +424,30 @@ export function MaterialUpload({
                 バナー素材をアップロードしてください
               </CardDescription>
             </div>
-            {!readOnly && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleApplySample}
-                className="gap-2 bg-transparent"
-              >
-                <Sparkles className="h-4 w-4" />
-                サンプルを反映
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              {!readOnly && onAddSlot && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onAddSlot}
+                  className="gap-2 bg-transparent"
+                >
+                  <Plus className="h-4 w-4" />
+                  枠を追加
+                </Button>
+              )}
+              {!readOnly && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleApplySample}
+                  className="gap-2 bg-transparent"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  サンプルを反映
+                </Button>
+              )}
+            </div>
           </div>
           {deadlineText && (
             <p className="text-sm text-amber-600 font-medium mt-2">{deadlineText}</p>
@@ -384,6 +464,8 @@ export function MaterialUpload({
                   onAddMaterial={onAddMaterial}
                   onRemoveMaterial={onRemoveMaterial}
                   onPreview={handlePreview}
+                  onUpdateSlot={onUpdateSlot}
+                  onRemoveSlot={onRemoveSlot}
                   readOnly={readOnly}
                 />
               ))}

@@ -172,6 +172,25 @@ export function getHallsByCompanyId(halls: HallData[], companyId: number): HallD
   return halls.filter((h) => h.companyId === companyId)
 }
 
+// ========== 日程重複バリデーション ==========
+
+export function datesOverlap(startA: Date, endA: Date, startB: Date, endB: Date): boolean {
+  return startA <= endB && startB <= endA;
+}
+
+export function findOverlappingSlots(
+  existingSlots: ProposalSlot[],
+  startDate: Date,
+  endDate: Date,
+  excludeSlotId?: string
+): ProposalSlot[] {
+  return existingSlots.filter(
+    (slot) =>
+      slot.id !== excludeSlotId &&
+      datesOverlap(startDate, endDate, slot.startDate, slot.endDate)
+  );
+}
+
 // 案件のステータス
 export type CaseStatus = 
   | "提案中" 
@@ -185,17 +204,7 @@ export type CaseStatus =
   | "掲載停止";
 
 // バナー種別
-export type BannerType =
-  | "【FP課】マイページバナー"
-  | "お知らせバナー"
-  | "サブバナー"
-  | "スプラッシュバナー"
-  | "マイページバナー"
-  | "メインバナー"
-  | "ローテーションバナー"
-  | "動画バナー"
-  | "取材来店バナー"
-  | "都道府県バナー";
+export type BannerType = "バナー各種";
 
 // エリア
 export interface AreaSlot {
@@ -225,16 +234,32 @@ export interface ProposalSlot {
   areaName?: string;
   startDate: Date;
   endDate: Date;
-  startTime: string; // "HH:mm" format
-  endTime: string; // "HH:mm" format
+  startTime?: string; // "HH:mm" format (optional)
+  endTime?: string; // "HH:mm" format (optional)
   bannerType: BannerType;
+}
+
+// チャットメッセージ
+export interface ChatMessage {
+  id: string;
+  caseId: string;
+  slotId: string;
+  sender: "admin" | "sales";
+  senderName: string;
+  content: string;
+  createdAt: Date;
+  isSystemMessage?: boolean;
 }
 
 // 案件
 export interface Case {
   id: string;
+  caseName?: string;
   corporateName: string;
   storeName: string;
+  companyId?: string;
+  hallId?: string;
+  salesPersonName?: string;
   status: CaseStatus;
   createdAt: Date;
   updatedAt: Date;
@@ -251,6 +276,7 @@ export interface Case {
   adminReviewStatus?: "pending" | "approved" | "rejected";
   adminReviewComment?: string;
   stopPublishingRequest?: string;
+  chatMessages?: ChatMessage[];
 }
 
 // 素材ファイル
@@ -362,15 +388,15 @@ export const mockAreaSlots: AreaSlot[] = [
 
 // 既存の予約
 export const mockBookings: SlotBooking[] = [
-  { id: "bk-1", areaSlotId: "area-1", bannerType: "メインバナー", hallName: "マルハン渋谷店", startDate: new Date("2026-02-01"), endDate: new Date("2026-02-07"), startHour: 0, endHour: 24, bookingStatus: "確定" },
-  { id: "bk-2", areaSlotId: "area-1", bannerType: "ローテーションバナー", hallName: "ダイナム渋谷店", startDate: new Date("2026-02-10"), endDate: new Date("2026-02-22"), startHour: 0, endHour: 24, bookingStatus: "確定" },
-  { id: "bk-3", areaSlotId: "area-2", bannerType: "お知らせバナー", hallName: "ガイア渋谷店", startDate: new Date("2026-02-05"), endDate: new Date("2026-02-14"), startHour: 0, endHour: 24, bookingStatus: "確定" },
-  { id: "bk-4", areaSlotId: "area-3", bannerType: "スプラッシュバナー", hallName: "エース新宿店", startDate: new Date("2026-02-01"), endDate: new Date("2026-02-10"), startHour: 0, endHour: 24, bookingStatus: "仮押さえ" },
-  { id: "bk-5", areaSlotId: "area-5", bannerType: "サブバナー", hallName: "マルハン池袋店", startDate: new Date("2026-02-15"), endDate: new Date("2026-02-25"), startHour: 0, endHour: 24, bookingStatus: "確定" },
-  { id: "bk-6", areaSlotId: "area-6", bannerType: "動画バナー", hallName: "サンライズ池袋店", startDate: new Date("2026-03-01"), endDate: new Date("2026-03-10"), startHour: 0, endHour: 24, bookingStatus: "仮押さえ" },
-  { id: "bk-7", areaSlotId: "area-7", bannerType: "取材来店バナー", hallName: "ビッグエース品川店", startDate: new Date("2026-02-08"), endDate: new Date("2026-02-18"), startHour: 0, endHour: 24, bookingStatus: "確定" },
-  { id: "bk-8", areaSlotId: "area-9", bannerType: "都道府県バナー", hallName: "ダイナム横浜店", startDate: new Date("2026-02-03"), endDate: new Date("2026-02-12"), startHour: 0, endHour: 24, bookingStatus: "確定" },
-  { id: "bk-9", areaSlotId: "area-11", bannerType: "マイページバナー", hallName: "マルハン梅田店", startDate: new Date("2026-02-10"), endDate: new Date("2026-02-20"), startHour: 0, endHour: 24, bookingStatus: "仮押さえ" },
+  { id: "bk-1", areaSlotId: "area-1", bannerType: "バナー各種", hallName: "マルハン渋谷店", startDate: new Date("2026-02-01"), endDate: new Date("2026-02-07"), startHour: 0, endHour: 24, bookingStatus: "確定" },
+  { id: "bk-2", areaSlotId: "area-1", bannerType: "バナー各種", hallName: "ダイナム渋谷店", startDate: new Date("2026-02-10"), endDate: new Date("2026-02-22"), startHour: 0, endHour: 24, bookingStatus: "確定" },
+  { id: "bk-3", areaSlotId: "area-2", bannerType: "バナー各種", hallName: "ガイア渋谷店", startDate: new Date("2026-02-05"), endDate: new Date("2026-02-14"), startHour: 0, endHour: 24, bookingStatus: "確定" },
+  { id: "bk-4", areaSlotId: "area-3", bannerType: "バナー各種", hallName: "エース新宿店", startDate: new Date("2026-02-01"), endDate: new Date("2026-02-10"), startHour: 0, endHour: 24, bookingStatus: "仮押さえ" },
+  { id: "bk-5", areaSlotId: "area-5", bannerType: "バナー各種", hallName: "マルハン池袋店", startDate: new Date("2026-02-15"), endDate: new Date("2026-02-25"), startHour: 0, endHour: 24, bookingStatus: "確定" },
+  { id: "bk-6", areaSlotId: "area-6", bannerType: "バナー各種", hallName: "サンライズ池袋店", startDate: new Date("2026-03-01"), endDate: new Date("2026-03-10"), startHour: 0, endHour: 24, bookingStatus: "仮押さえ" },
+  { id: "bk-7", areaSlotId: "area-7", bannerType: "バナー各種", hallName: "ビッグエース品川店", startDate: new Date("2026-02-08"), endDate: new Date("2026-02-18"), startHour: 0, endHour: 24, bookingStatus: "確定" },
+  { id: "bk-8", areaSlotId: "area-9", bannerType: "バナー各種", hallName: "ダイナム横浜店", startDate: new Date("2026-02-03"), endDate: new Date("2026-02-12"), startHour: 0, endHour: 24, bookingStatus: "確定" },
+  { id: "bk-9", areaSlotId: "area-11", bannerType: "バナー各種", hallName: "マルハン梅田店", startDate: new Date("2026-02-10"), endDate: new Date("2026-02-20"), startHour: 0, endHour: 24, bookingStatus: "仮押さえ" },
 ];
 
 export const mockCases: Case[] = [
@@ -390,7 +416,7 @@ export const mockCases: Case[] = [
         endDate: new Date("2026-02-15"),
         startTime: "09:00",
         endTime: "18:00",
-        bannerType: "メインバナー",
+        bannerType: "バナー各種",
       },
       {
         id: "slot-1b",
@@ -400,7 +426,7 @@ export const mockCases: Case[] = [
         endDate: new Date("2026-02-20"),
         startTime: "10:00",
         endTime: "22:00",
-        bannerType: "ローテーションバナー",
+        bannerType: "バナー各種",
       },
     ],
     aiRecommendedSlots: [
@@ -410,7 +436,7 @@ export const mockCases: Case[] = [
         endDate: new Date("2026-02-20"),
         startTime: "10:00",
         endTime: "17:00",
-        bannerType: "サブバナー",
+        bannerType: "バナー各種",
       },
     ],
   },
@@ -430,7 +456,7 @@ export const mockCases: Case[] = [
         endDate: new Date("2026-02-28"),
         startTime: "10:00",
         endTime: "20:00",
-        bannerType: "お知らせバナー",
+        bannerType: "バナー各種",
       },
       {
         id: "slot-2b",
@@ -440,7 +466,7 @@ export const mockCases: Case[] = [
         endDate: new Date("2026-02-25"),
         startTime: "00:00",
         endTime: "23:59",
-        bannerType: "スプラッシュバナー",
+        bannerType: "バナー各種",
       },
       {
         id: "slot-2c",
@@ -450,7 +476,7 @@ export const mockCases: Case[] = [
         endDate: new Date("2026-03-15"),
         startTime: "08:00",
         endTime: "20:00",
-        bannerType: "動画バナー",
+        bannerType: "バナー各種",
       },
     ],
   },
@@ -470,7 +496,7 @@ export const mockCases: Case[] = [
         endDate: new Date("2026-03-15"),
         startTime: "08:00",
         endTime: "22:00",
-        bannerType: "取材来店バナー",
+        bannerType: "バナー各種",
       },
       {
         id: "slot-3b",
@@ -480,7 +506,7 @@ export const mockCases: Case[] = [
         endDate: new Date("2026-03-20"),
         startTime: "09:00",
         endTime: "21:00",
-        bannerType: "都道府県バナー",
+        bannerType: "バナー各種",
       },
     ],
     adminReviewStatus: "pending",
@@ -501,7 +527,7 @@ export const mockCases: Case[] = [
         endDate: new Date("2026-02-15"),
         startTime: "09:00",
         endTime: "21:00",
-        bannerType: "マイページバナー",
+        bannerType: "バナー各種",
       },
       {
         id: "slot-4b",
@@ -511,7 +537,7 @@ export const mockCases: Case[] = [
         endDate: new Date("2026-02-20"),
         startTime: "10:00",
         endTime: "20:00",
-        bannerType: "【FP課】マイページバナー",
+        bannerType: "バナー各種",
       },
     ],
     adminReviewStatus: "approved",
@@ -541,7 +567,7 @@ export const mockCases: Case[] = [
         endDate: new Date("2026-03-05"),
         startTime: "12:00",
         endTime: "18:00",
-        bannerType: "サブバナー",
+        bannerType: "バナー各種",
       },
       {
         id: "slot-6b",
@@ -551,10 +577,40 @@ export const mockCases: Case[] = [
         endDate: new Date("2026-03-10"),
         startTime: "09:00",
         endTime: "23:00",
-        bannerType: "メインバナー",
+        bannerType: "バナー各種",
       },
     ],
     adminReviewStatus: "rejected",
     adminReviewComment: "画像サイズが規定に合っていません。1200x628pxに修正してください。",
+    chatMessages: [
+      {
+        id: "chat-1",
+        caseId: "case-6",
+        slotId: "slot-6a",
+        sender: "admin",
+        senderName: "事務局",
+        content: "差し戻しました。画像サイズが規定に合っていません。1200x628pxに修正してください。",
+        createdAt: new Date("2026-01-28T10:30:00"),
+        isSystemMessage: true,
+      },
+      {
+        id: "chat-2",
+        caseId: "case-6",
+        slotId: "slot-6a",
+        sender: "sales",
+        senderName: "山田 太郎",
+        content: "承知しました。修正して再度アップロードいたします。",
+        createdAt: new Date("2026-01-28T11:15:00"),
+      },
+      {
+        id: "chat-3",
+        caseId: "case-6",
+        slotId: "slot-6a",
+        sender: "admin",
+        senderName: "青木 花子",
+        content: "よろしくお願いします。修正後に再度ご提出ください。",
+        createdAt: new Date("2026-01-28T11:30:00"),
+      },
+    ],
   },
 ];

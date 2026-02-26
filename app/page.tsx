@@ -52,7 +52,10 @@ export default function Home() {
   };
 
   const handleCaseCreated = (caseId: string) => {
-    handleSelectCase(caseId);
+    // 作成後は一覧画面に戻る
+    setSelectedCaseId(null);
+    setSelectedCase(null);
+    setLocalViewMode("list");
   };
 
   const handleDemoReset = () => {

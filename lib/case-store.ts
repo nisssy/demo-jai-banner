@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import type { Case, ProposalSlot, MaterialFile } from "./types";
+import type { Case, ProposalSlot, MaterialFile, ChatMessage } from "./types";
 import { mockCases } from "./types";
 
 interface CaseStore {
@@ -17,7 +17,7 @@ interface CaseStore {
   setViewMode: (mode: "sales" | "admin") => void;
   
   // Case Actions
-  createCase: (corporateName: string, storeName: string) => Case;
+  createCase: (corporateName: string, storeName: string, additionalData?: Partial<Case>) => Case;
   updateCase: (id: string, updates: Partial<Case>) => void;
   deleteCase: (id: string) => void;
   
@@ -37,6 +37,10 @@ interface CaseStore {
   requestAdminReview: (caseId: string) => void;
   startPublishing: (caseId: string) => void;
   
+  // Chat Actions
+  sendChatMessage: (caseId: string, slotId: string, content: string, sender: "admin" | "sales", senderName: string) => void;
+  addSystemChatMessage: (caseId: string, slotId: string, content: string, sender: "admin" | "sales") => void;
+
   // Admin Actions
   approveCase: (caseId: string) => void;
   rejectCase: (caseId: string, comment: string) => void;
@@ -55,7 +59,7 @@ export const useCaseStore = create<CaseStore>((set, get) => ({
   setCurrentStep: (step) => set({ currentStep: step }),
   setViewMode: (mode) => set({ viewMode: mode }),
   
-  createCase: (corporateName, storeName) => {
+  createCase: (corporateName, storeName, additionalData) => {
     const newCase: Case = {
       id: `case-${Date.now()}`,
       corporateName,
@@ -72,8 +76,9 @@ export const useCaseStore = create<CaseStore>((set, get) => ({
           bannerType: "静止画",
         },
       ],
+      ...additionalData,
     };
-    set((state) => ({ cases: [...state.cases, newCase] }));
+    set((state) => ({ cases: [newCase, ...state.cases] }));
     return newCase;
   },
   
@@ -177,6 +182,45 @@ export const useCaseStore = create<CaseStore>((set, get) => ({
     updateCase(caseId, { status: "掲載中" });
   },
   
+  sendChatMessage: (caseId, slotId, content, sender, senderName) => {
+    const { updateCase, cases } = get();
+    const caseItem = cases.find((c) => c.id === caseId);
+    if (caseItem) {
+      const newMessage: ChatMessage = {
+        id: `chat-${Date.now()}`,
+        caseId,
+        slotId,
+        sender,
+        senderName,
+        content,
+        createdAt: new Date(),
+      };
+      updateCase(caseId, {
+        chatMessages: [...(caseItem.chatMessages || []), newMessage],
+      });
+    }
+  },
+
+  addSystemChatMessage: (caseId, slotId, content, sender) => {
+    const { updateCase, cases } = get();
+    const caseItem = cases.find((c) => c.id === caseId);
+    if (caseItem) {
+      const newMessage: ChatMessage = {
+        id: `chat-sys-${Date.now()}-${slotId}`,
+        caseId,
+        slotId,
+        sender,
+        senderName: sender === "admin" ? "事務局" : "営業",
+        content,
+        createdAt: new Date(),
+        isSystemMessage: true,
+      };
+      updateCase(caseId, {
+        chatMessages: [...(caseItem.chatMessages || []), newMessage],
+      });
+    }
+  },
+
   approveCase: (caseId) => {
     const { updateCase } = get();
     updateCase(caseId, {
@@ -184,14 +228,20 @@ export const useCaseStore = create<CaseStore>((set, get) => ({
       adminReviewComment: undefined,
     });
   },
-  
+
   rejectCase: (caseId, comment) => {
-    const { updateCase } = get();
+    const { updateCase, addSystemChatMessage, cases } = get();
     updateCase(caseId, {
       status: "差し戻し",
       adminReviewStatus: "rejected",
       adminReviewComment: comment,
     });
+    const caseItem = cases.find((c) => c.id === caseId);
+    if (caseItem) {
+      for (const slot of caseItem.proposalSlots) {
+        addSystemChatMessage(caseId, slot.id, `差し戻しました。${comment}`, "admin");
+      }
+    }
   },
   
   requestStopPublishing: (caseId, reason) => {

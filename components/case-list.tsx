@@ -254,16 +254,7 @@ export function CaseList({ onSelectCase, onOpenCreateForm, onAddMaterial }: Case
                   <SelectValue placeholder="イベント区分を検索..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="【FP課】マイページバナー">【FP課】マイページバナー</SelectItem>
-                  <SelectItem value="お知らせバナー">お知らせバナー</SelectItem>
-                  <SelectItem value="サブバナー">サブバナー</SelectItem>
-                  <SelectItem value="スプラッシュバナー">スプラッシュバナー</SelectItem>
-                  <SelectItem value="マイページバナー">マイページバナー</SelectItem>
-                  <SelectItem value="メインバナー">メインバナー</SelectItem>
-                  <SelectItem value="ローテーションバナー">ローテーションバナー</SelectItem>
-                  <SelectItem value="動画バナー">動画バナー</SelectItem>
-                  <SelectItem value="取材来店バナー">取材来店バナー</SelectItem>
-                  <SelectItem value="都道府県バナー">都道府県バナー</SelectItem>
+                  <SelectItem value="バナー各種">バナー各種</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -391,7 +382,7 @@ export function CaseList({ onSelectCase, onOpenCreateForm, onAddMaterial }: Case
                     <div className="flex items-start gap-4">
                       <div>
                         <h3 className="text-2xl font-bold text-foreground flex items-center gap-3">
-                          {caseItem.corporateName} キャンペーン
+                          {caseItem.caseName || `${caseItem.corporateName} キャンペーン`}
                           <span className="text-lg font-normal text-muted-foreground">
                             案件No: {getCaseDisplayId(index)}
                           </span>
@@ -409,7 +400,7 @@ export function CaseList({ onSelectCase, onOpenCreateForm, onAddMaterial }: Case
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-muted-foreground w-20">法人ID:</span>
-                        <span className="font-mono">CORP-{String(index + 10).padStart(3, '0')}</span>
+                        <span className="font-mono">{caseItem.companyId || "-"}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-muted-foreground w-20">ホール名:</span>
@@ -417,11 +408,11 @@ export function CaseList({ onSelectCase, onOpenCreateForm, onAddMaterial }: Case
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-muted-foreground w-20">ホールID:</span>
-                        <span className="font-mono">HALL-{String(index + 10).padStart(3, '0')}-01</span>
+                        <span className="font-mono">{caseItem.hallId || "-"}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-muted-foreground w-20">担当営業:</span>
-                        <span className="font-medium">山田 太郎</span>
+                        <span className="font-medium">{caseItem.salesPersonName || "-"}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-muted-foreground w-20">依頼日:</span>

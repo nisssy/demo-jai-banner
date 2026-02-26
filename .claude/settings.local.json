@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx next:*)",
+      "Bash(npm run:*)",
+      "Bash(./node_modules/.bin/next build:*)",
+      "Bash(ls:*)",
+      "Bash(bun:*)",
+      "Bash(grep:*)",
+      "Bash(wc:*)"
+    ]
+  }
+}

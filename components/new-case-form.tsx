@@ -20,7 +20,7 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { ChevronLeft, ChevronUp, ChevronDown, Plus } from "lucide-react";
-import { mockAnniversaryPacks } from "@/lib/types";
+import { mockAnniversaryPacks, initialCompanies, initialHalls } from "@/lib/types";
 import type { CompanyData, HallData } from "@/lib/types";
 import { CompanyHallCombobox } from "@/components/company-hall-combobox";
 import { useCaseStore } from "@/lib/case-store";
@@ -55,9 +55,34 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
     { id: "1", category: "", eventType: "", isOpen: true, usageMethod: "", selectedPackId: "", billingAmount: "" },
   ]);
 
-  const corpId = selectedCompany?.companyId ?? "";
-  const hallId = selectedHall?.hallId ?? "";
+  const [corpIdInput, setCorpIdInput] = useState("");
+  const [hallIdInput, setHallIdInput] = useState("");
+
+  const corpId = selectedCompany?.companyId ?? corpIdInput;
+  const hallId = selectedHall?.hallId ?? hallIdInput;
   const hallSalesPerson = selectedHall?.salesPersonName ?? "";
+
+  // ホールIDを手入力した場合、マスタから自動選択
+  const handleHallIdChange = (value: string) => {
+    setHallIdInput(value);
+    const matched = initialHalls.find((h) => h.hallId === value);
+    if (matched) {
+      setSelectedHall(matched);
+      const company = initialCompanies.find((c) => c.id === matched.companyId) ?? null;
+      setSelectedCompany(company);
+    }
+  };
+
+  // 法人IDを手入力した場合、マスタから自動選択
+  const handleCorpIdChange = (value: string) => {
+    setCorpIdInput(value);
+    const matched = initialCompanies.find((c) => c.companyId === value);
+    if (matched) {
+      setSelectedCompany(matched);
+      setSelectedHall(null);
+      setHallIdInput("");
+    }
+  };
 
   const addMaterial = () => {
     setMaterials([
@@ -92,6 +117,21 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
     );
   };
 
+  // フォーム全体のバリデーション（ホールのみオプショナル、それ以外は必須）
+  const isFormValid = (() => {
+    if (!selectedCompany) return false;
+    if (!caseName.trim()) return false;
+    // 商材情報：全ての商材でカテゴリ・イベント区分・利用方法が入力済みか
+    const allMaterialsFilled = materials.every((m) => {
+      if (!m.category || !m.eventType || !m.usageMethod) return false;
+      if (m.usageMethod === "single" && !m.billingAmount) return false;
+      if (m.usageMethod === "anniversary" && !m.selectedPackId) return false;
+      return true;
+    });
+    if (!allMaterialsFilled) return false;
+    return true;
+  })();
+
   // 選択中の法人に紐づく周年パック（mockAnniversaryPacksのcorporationIdは旧形式"corp-1"等）
   const legacyCorporationId = selectedCompany
     ? `corp-${selectedCompany.id}`
@@ -105,8 +145,38 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
   const nearestPack = corporationPacks.length > 0 ? corporationPacks[0] : null;
 
   const handleSubmit = () => {
-    if (!selectedCompany || !selectedHall) return;
-    const newCase = createCase(selectedCompany.name, selectedHall.name);
+    if (!isFormValid || !selectedCompany) return;
+
+    // フォームの商材情報を ProposalSlot に変換
+    const proposalSlots = materials
+      .filter((m) => m.eventType) // イベント区分が選択されたもののみ
+      .map((m) => ({
+        id: `slot-${Date.now()}-${m.id}`,
+        startDate: new Date(),
+        endDate: new Date(),
+        bannerType: m.eventType as import("@/lib/types").BannerType,
+      }));
+
+    // 請求額の合計を計算
+    const totalBilling = materials.reduce((sum, m) => {
+      const amount = m.billingAmount ? Number(m.billingAmount) : 0;
+      return sum + amount;
+    }, 0);
+
+    // 周年パック利用かどうか
+    const hasAnniversary = materials.some((m) => m.usageMethod === "anniversary");
+    const anniversaryPackId = materials.find((m) => m.selectedPackId)?.selectedPackId;
+
+    const newCase = createCase(selectedCompany.name, selectedHall?.name ?? "", {
+      caseName: caseName.trim() || undefined,
+      companyId: selectedCompany.companyId,
+      hallId: selectedHall?.hallId,
+      salesPersonName: hallSalesPerson || staffName || undefined,
+      proposalSlots,
+      billingAmount: totalBilling || undefined,
+      isAnniversaryPack: hasAnniversary || undefined,
+      anniversaryPackCode: anniversaryPackId || undefined,
+    });
     onCaseCreated(newCase.id);
   };
 
@@ -134,8 +204,18 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
             <CompanyHallCombobox
               selectedCompany={selectedCompany}
               selectedHall={selectedHall}
-              onSelectCompany={setSelectedCompany}
-              onSelectHall={setSelectedHall}
+              onSelectCompany={(company) => {
+                setSelectedCompany(company);
+                setCorpIdInput(company?.companyId ?? "");
+                if (!company) {
+                  setSelectedHall(null);
+                  setHallIdInput("");
+                }
+              }}
+              onSelectHall={(hall) => {
+                setSelectedHall(hall);
+                setHallIdInput(hall?.hallId ?? "");
+              }}
             />
           </div>
 
@@ -145,18 +225,16 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
               <Label className="text-sm">法人ID</Label>
               <Input
                 value={corpId}
-                readOnly
-                className="bg-muted/30"
-                placeholder=""
+                onChange={(e) => handleCorpIdChange(e.target.value)}
+                placeholder="法人IDを入力..."
               />
             </div>
             <div className="space-y-2">
               <Label className="text-sm">ホールID</Label>
               <Input
                 value={hallId}
-                readOnly
-                className="bg-muted/30"
-                placeholder=""
+                onChange={(e) => handleHallIdChange(e.target.value)}
+                placeholder="ホールIDを入力..."
               />
             </div>
           </div>
@@ -261,16 +339,7 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
                           <SelectValue placeholder="選択してください" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="【FP課】マイページバナー">【FP課】マイページバナー</SelectItem>
-                          <SelectItem value="お知らせバナー">お知らせバナー</SelectItem>
-                          <SelectItem value="サブバナー">サブバナー</SelectItem>
-                          <SelectItem value="スプラッシュバナー">スプラッシュバナー</SelectItem>
-                          <SelectItem value="マイページバナー">マイページバナー</SelectItem>
-                          <SelectItem value="メインバナー">メインバナー</SelectItem>
-                          <SelectItem value="ローテーションバナー">ローテーションバナー</SelectItem>
-                          <SelectItem value="動画バナー">動画バナー</SelectItem>
-                          <SelectItem value="取材来店バナー">取材来店バナー</SelectItem>
-                          <SelectItem value="都道府県バナー">都道府県バナー</SelectItem>
+                          <SelectItem value="バナー各種">バナー各種</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -445,7 +514,7 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
         </Button>
         <Button
           onClick={handleSubmit}
-          disabled={!selectedCompany || !selectedHall}
+          disabled={!isFormValid}
           className="bg-blue-600 hover:bg-blue-700 text-white px-8"
         >
           案件を作成

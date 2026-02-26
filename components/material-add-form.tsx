@@ -30,20 +30,6 @@ interface MaterialAddFormProps {
 const circledNumbers =
   "\u2460\u2461\u2462\u2463\u2464\u2465\u2466\u2467\u2468\u2469";
 
-const timeOptions = Array.from({ length: 24 }, (_, i) => {
-  const hour = String(i).padStart(2, "0");
-  return `${hour}:00`;
-});
-
-function calculateDuration(start: string, end: string): string {
-  if (!start || !end) return "";
-  const [sh] = start.split(":").map(Number);
-  const [eh] = end.split(":").map(Number);
-  let diff = eh - sh;
-  if (diff < 0) diff += 24;
-  return `${diff}時間00分`;
-}
-
 interface MaterialFormItem {
   id: string;
   isOpen: boolean;
@@ -51,12 +37,9 @@ interface MaterialFormItem {
   eventType: string;
   materialName: string;
   implementDate: string;
-  startTime: string;
-  endTime: string;
   mustSeeFlag: string;
   mustSeePublish: string;
   mustSeeDate: string;
-  mustSeeTime: string;
   reportRequired: string;
   companionCount: number;
   companions: string[];
@@ -73,12 +56,9 @@ function createEmptyMaterial(id: string): MaterialFormItem {
     eventType: "trinity",
     materialName: "",
     implementDate: "",
-    startTime: "10:00",
-    endTime: "18:00",
     mustSeeFlag: "0",
     mustSeePublish: "不要",
     mustSeeDate: "",
-    mustSeeTime: "",
     reportRequired: "要",
     companionCount: 2,
     companions: ["未定", "未定"],
@@ -89,16 +69,7 @@ function createEmptyMaterial(id: string): MaterialFormItem {
 }
 
 const bannerTypeMap: Record<string, BannerType> = {
-  "【FP課】マイページバナー": "【FP課】マイページバナー",
-  "お知らせバナー": "お知らせバナー",
-  "サブバナー": "サブバナー",
-  "スプラッシュバナー": "スプラッシュバナー",
-  "マイページバナー": "マイページバナー",
-  "メインバナー": "メインバナー",
-  "ローテーションバナー": "ローテーションバナー",
-  "動画バナー": "動画バナー",
-  "取材来店バナー": "取材来店バナー",
-  "都道府県バナー": "都道府県バナー",
+  "バナー各種": "バナー各種",
 };
 
 export function MaterialAddForm({ caseId, onBack }: MaterialAddFormProps) {
@@ -140,9 +111,7 @@ export function MaterialAddForm({ caseId, onBack }: MaterialAddFormProps) {
         id: `slot-${Date.now()}-${addedCount}`,
         startDate: implementDate,
         endDate: implementDate,
-        startTime: mat.startTime || "10:00",
-        endTime: mat.endTime || "18:00",
-        bannerType: bannerTypeMap[mat.eventType] || "メインバナー",
+        bannerType: bannerTypeMap[mat.eventType] || "バナー各種",
       };
 
       addProposalSlot(caseId, slot);
@@ -227,16 +196,7 @@ export function MaterialAddForm({ caseId, onBack }: MaterialAddFormProps) {
                         <SelectValue placeholder="イベント区分を検索..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="【FP課】マイページバナー">【FP課】マイページバナー</SelectItem>
-                        <SelectItem value="お知らせバナー">お知らせバナー</SelectItem>
-                        <SelectItem value="サブバナー">サブバナー</SelectItem>
-                        <SelectItem value="スプラッシュバナー">スプラッシュバナー</SelectItem>
-                        <SelectItem value="マイページバナー">マイページバナー</SelectItem>
-                        <SelectItem value="メインバナー">メインバナー</SelectItem>
-                        <SelectItem value="ローテーションバナー">ローテーションバナー</SelectItem>
-                        <SelectItem value="動画バナー">動画バナー</SelectItem>
-                        <SelectItem value="取材来店バナー">取材来店バナー</SelectItem>
-                        <SelectItem value="都道府県バナー">都道府県バナー</SelectItem>
+                        <SelectItem value="バナー各種">バナー各種</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -270,62 +230,6 @@ export function MaterialAddForm({ caseId, onBack }: MaterialAddFormProps) {
                           e.target.value
                         )
                       }
-                    />
-                  </div>
-                </div>
-
-                {/* 開始時間 / 終了時間 / 開催時間数 */}
-                <div className="grid grid-cols-3 gap-6">
-                  <div className="space-y-2">
-                    <Label className="text-sm">開始時間</Label>
-                    <Select
-                      value={material.startTime}
-                      onValueChange={(val) =>
-                        updateMaterial(material.id, "startTime", val)
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="選択" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {timeOptions.map((t) => (
-                          <SelectItem key={t} value={t}>
-                            {t}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm">終了時間</Label>
-                    <Select
-                      value={material.endTime}
-                      onValueChange={(val) =>
-                        updateMaterial(material.id, "endTime", val)
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="選択" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {timeOptions.map((t) => (
-                          <SelectItem key={t} value={t}>
-                            {t}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm">開催時間数</Label>
-                    <Input
-                      value={calculateDuration(
-                        material.startTime,
-                        material.endTime
-                      )}
-                      readOnly
-                      className="bg-muted/30"
-                      placeholder="0時間00分"
                     />
                   </div>
                 </div>
@@ -368,37 +272,20 @@ export function MaterialAddForm({ caseId, onBack }: MaterialAddFormProps) {
                   </div>
                 </div>
 
-                {/* 必見掲載日 / 必見掲載時刻 */}
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label className="text-sm">必見掲載日</Label>
-                    <Input
-                      type="date"
-                      value={material.mustSeeDate}
-                      onChange={(e) =>
-                        updateMaterial(
-                          material.id,
-                          "mustSeeDate",
-                          e.target.value
-                        )
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm">必見掲載時刻</Label>
-                    <Input
-                      type="time"
-                      value={material.mustSeeTime}
-                      onChange={(e) =>
-                        updateMaterial(
-                          material.id,
-                          "mustSeeTime",
-                          e.target.value
-                        )
-                      }
-                      placeholder="--:--"
-                    />
-                  </div>
+                {/* 必見掲載日 */}
+                <div className="max-w-[300px] space-y-2">
+                  <Label className="text-sm">必見掲載日</Label>
+                  <Input
+                    type="date"
+                    value={material.mustSeeDate}
+                    onChange={(e) =>
+                      updateMaterial(
+                        material.id,
+                        "mustSeeDate",
+                        e.target.value
+                      )
+                    }
+                  />
                 </div>
 
                 {/* レポート要否 */}

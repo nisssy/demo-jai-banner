@@ -19,11 +19,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChevronLeft, ChevronRight, Clock, Sparkles, X, Filter, MousePointerClick } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, Sparkles, X, Filter, MousePointerClick, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { ProposalSlot, BannerType, AreaSlot, SlotBooking } from "@/lib/types";
-import { mockAreaSlots, mockBookings } from "@/lib/types";
+import type { ProposalSlot, BannerType, AreaSlot } from "@/lib/types";
+import { mockAreaSlots, mockBookings, findOverlappingSlots } from "@/lib/types";
 import {
   format,
   addMonths,
@@ -34,7 +33,6 @@ import {
   isBefore,
   isSameDay,
   startOfDay,
-  addDays,
   isAfter,
 } from "date-fns";
 import { ja } from "date-fns/locale";
@@ -48,16 +46,7 @@ interface SlotCalendarProps {
 }
 
 const allBannerTypes: BannerType[] = [
-  "【FP課】マイページバナー",
-  "お知らせバナー",
-  "サブバナー",
-  "スプラッシュバナー",
-  "マイページバナー",
-  "メインバナー",
-  "ローテーションバナー",
-  "動画バナー",
-  "取材来店バナー",
-  "都道府県バナー",
+  "バナー各種",
 ];
 
 // 絞り込み用のバナー種別リスト
@@ -66,10 +55,6 @@ const filterBannerOptions: (BannerType | "すべて")[] = [
   ...allBannerTypes,
 ];
 
-const hourOptions = Array.from({ length: 24 }, (_, i) => ({
-  value: i.toString(),
-  label: `${i.toString().padStart(2, "0")}:00`,
-}));
 
 export function SlotCalendar({
   selectedSlots,
@@ -80,8 +65,6 @@ export function SlotCalendar({
 }: SlotCalendarProps) {
   const now = new Date();
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(now));
-  const [viewMode, setViewMode] = useState<"month" | "day">("month");
-  const [selectedDay, setSelectedDay] = useState<Date>(now);
 
   // Filters
   const [prefectureFilter, setPrefectureFilter] = useState<string>("all");
@@ -93,9 +76,10 @@ export function SlotCalendar({
   const [selectedAreaSlot, setSelectedAreaSlot] = useState<AreaSlot | null>(null);
   const [selectionStartDay, setSelectionStartDay] = useState<number | null>(null);
   const [selectionEndDay, setSelectionEndDay] = useState<number | null>(null);
-  const [startHour, setStartHour] = useState("13");
-  const [endHour, setEndHour] = useState("14");
-  const [selectedBannerType, setSelectedBannerType] = useState<BannerType>("メインバナー");
+  const [selectedBannerType, setSelectedBannerType] = useState<BannerType>("バナー各種");
+
+  // Overlap error
+  const [overlapError, setOverlapError] = useState<string | null>(null);
 
   // Dragging
   const [isDragging, setIsDragging] = useState(false);
@@ -147,15 +131,6 @@ export function SlotCalendar({
     (day: number) => {
       const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
       return isBefore(date, startOfDay(now));
-    },
-    [currentMonth, now]
-  );
-
-  // Check if a date is past including hour for day view
-  const isPastDateTime = useCallback(
-    (day: number, hour: number) => {
-      const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day, hour);
-      return isBefore(date, now);
     },
     [currentMonth, now]
   );
@@ -237,8 +212,6 @@ export function SlotCalendar({
     const eDay = Math.max(selectionStartDay, selectionEndDay);
     setSelectionStartDay(sDay);
     setSelectionEndDay(eDay);
-    setStartHour("13");
-    setEndHour("14");
     setIsDialogOpen(true);
   };
 
@@ -247,13 +220,17 @@ export function SlotCalendar({
 
     const sDay = Math.min(selectionStartDay, selectionEndDay);
     const eDay = Math.max(selectionStartDay, selectionEndDay);
-    const sHour = parseInt(startHour);
-    const eHour = parseInt(endHour);
 
     const startDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), sDay);
     const endDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), eDay);
 
-    if (isSameDay(startDate, endDate) && eHour <= sHour) {
+    // 重複チェック
+    const overlapping = findOverlappingSlots(selectedSlots, startDate, endDate);
+    if (overlapping.length > 0) {
+      const overlapNames = overlapping
+        .map((s) => `${s.areaName || "枠"} (${format(s.startDate, "M/d")}〜${format(s.endDate, "M/d")})`)
+        .join(", ");
+      setOverlapError(`日程が重複しています: ${overlapNames}`);
       return;
     }
 
@@ -263,8 +240,6 @@ export function SlotCalendar({
       areaName: selectedAreaSlot.area,
       startDate,
       endDate,
-      startTime: `${startHour.padStart(2, "0")}:00`,
-      endTime: `${endHour.padStart(2, "0")}:00`,
       bannerType: selectedBannerType,
     };
     onAddSlot(newSlot);
@@ -276,7 +251,8 @@ export function SlotCalendar({
     setSelectionEndDay(null);
     setSelectedAreaSlot(null);
     setDragAreaId(null);
-    setSelectedBannerType("メインバナー");
+    setSelectedBannerType("バナー各種");
+    setOverlapError(null);
     setIsDialogOpen(false);
   };
 
@@ -288,22 +264,6 @@ export function SlotCalendar({
     const sDay = Math.min(selectionStartDay, selectionEndDay);
     const eDay = Math.max(selectionStartDay, selectionEndDay);
     return day >= sDay && day <= eDay;
-  };
-
-  // Valid end hour options (must be after start hour with 1hr gap)
-  const validEndHourOptions = useMemo(() => {
-    const sHour = parseInt(startHour);
-    return hourOptions.filter((h) => parseInt(h.value) > sHour);
-  }, [startHour]);
-
-  // When start hour changes, adjust end hour if needed
-  const handleStartHourChange = (value: string) => {
-    setStartHour(value);
-    const sHour = parseInt(value);
-    const eHour = parseInt(endHour);
-    if (eHour <= sHour) {
-      setEndHour(Math.min(sHour + 1, 23).toString());
-    }
   };
 
   return (
@@ -321,8 +281,8 @@ export function SlotCalendar({
                 <Clock className="h-4 w-4 text-muted-foreground" />
                 <span>
                   {slot.areaName && <span className="font-medium">{slot.areaName} | </span>}
-                  {format(slot.startDate, "M/d", { locale: ja })} {slot.startTime} -{" "}
-                  {format(slot.endDate, "M/d", { locale: ja })} {slot.endTime}
+                  {format(slot.startDate, "M/d", { locale: ja })} -{" "}
+                  {format(slot.endDate, "M/d", { locale: ja })}
                 </span>
                 <Badge variant="secondary" className="text-xs">
                   {slot.bannerType}
@@ -353,18 +313,6 @@ export function SlotCalendar({
             </Badge>
           </div>
           <div className="flex items-center gap-2">
-            {/* 日/月切り替え */}
-            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "month" | "day")}>
-              <TabsList className="h-8">
-                <TabsTrigger value="day" className="text-xs px-3 h-6">
-                  日
-                </TabsTrigger>
-                <TabsTrigger value="month" className="text-xs px-3 h-6">
-                  月
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-
             {/* 月ナビゲーション */}
             <div className="flex items-center gap-1">
               <Button
@@ -438,7 +386,7 @@ export function SlotCalendar({
         </div>
 
         {/* 月表示 */}
-        {viewMode === "month" && (
+        {(
           <div
             ref={scrollRef}
             className="overflow-x-auto"
@@ -571,147 +519,6 @@ export function SlotCalendar({
           </div>
         )}
 
-        {/* 日表示（24時間タイムライン） */}
-        {viewMode === "day" && (
-          <div>
-            {/* 日付ナビゲーション */}
-            <div className="flex items-center justify-center gap-2 border-b py-2 bg-muted/10">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => setSelectedDay(addDays(selectedDay, -1))}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-sm font-medium">
-                {format(selectedDay, "yyyy年M月d日(E)", { locale: ja })}
-              </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => setSelectedDay(addDays(selectedDay, 1))}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {/* 時間ヘッダー */}
-            <div className="flex border-b overflow-x-auto min-w-[900px]">
-              <div className="w-[140px] shrink-0 px-3 py-2 text-xs font-medium text-muted-foreground border-r bg-muted/20">
-                掲載枠
-              </div>
-              <div className="flex-1 flex">
-                {Array.from({ length: 24 }, (_, i) => (
-                  <div
-                    key={i}
-                    className="flex-1 text-center py-2 text-xs border-r last:border-r-0 min-w-[32px]"
-                  >
-                    {i.toString().padStart(2, "0")}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* エリア行（日表示） */}
-            {filteredAreaSlots.map((areaSlot) => {
-              let dayBookings = mockBookings.filter(
-                (b) =>
-                  b.areaSlotId === areaSlot.id &&
-                  !isAfter(b.startDate, selectedDay) &&
-                  !isBefore(b.endDate, selectedDay)
-              );
-              if (statusFilter !== "すべて") {
-                dayBookings = dayBookings.filter((b) => b.bookingStatus === statusFilter);
-              }
-              if (bannerTypeFilter !== "すべて") {
-                dayBookings = dayBookings.filter((b) => b.bannerType === bannerTypeFilter);
-              }
-              const filteredDayBookings = dayBookings;
-              const proposals = selectedSlots.filter(
-                (s) =>
-                  s.areaSlotId === areaSlot.id &&
-                  !isAfter(s.startDate, selectedDay) &&
-                  !isBefore(s.endDate, selectedDay)
-              );
-
-              return (
-                <div key={areaSlot.id} className="flex border-b last:border-b-0 min-w-[900px]">
-                  <div className="w-[140px] shrink-0 px-3 py-4 text-sm font-medium border-r bg-muted/10 flex items-center">
-                    {areaSlot.area}
-                  </div>
-                  <div className="flex-1 relative" style={{ minHeight: "56px" }}>
-                    {/* 時間セル */}
-                    <div className="flex absolute inset-0">
-                      {Array.from({ length: 24 }, (_, i) => {
-                        const past = isPastDateTime(selectedDay.getDate(), i);
-                        return (
-                          <div
-                            key={i}
-                            className={cn(
-                              "flex-1 border-r last:border-r-0 min-w-[32px]",
-                              past && "bg-muted/20"
-                            )}
-                          />
-                        );
-                      })}
-                    </div>
-
-                    {/* 既存予約 */}
-                    {filteredDayBookings.map((booking) => {
-                      const left = `${(booking.startHour / 24) * 100}%`;
-                      const width = `${((booking.endHour - booking.startHour) / 24) * 100}%`;
-                      return (
-                        <div
-                          key={booking.id}
-                          className={cn(
-                            "absolute top-1 h-[calc(50%-4px)] rounded-sm text-xs flex items-center px-2 overflow-hidden pointer-events-none z-10",
-                            booking.bookingStatus === "確定"
-                              ? "bg-blue-200 text-blue-800"
-                              : "bg-amber-100 text-amber-800 border border-dashed border-amber-400"
-                          )}
-                          style={{ left, width }}
-                          title={`${booking.bannerType} / ${booking.hallName}`}
-                        >
-                          <span className="truncate">{booking.bannerType} / {booking.hallName}</span>
-                        </div>
-                      );
-                    })}
-
-                    {/* 新規案件 */}
-                    {proposals.map((slot) => {
-                      const sHour = parseInt(slot.startTime.split(":")[0]);
-                      const eHour = parseInt(slot.endTime.split(":")[0]);
-                      const left = `${(sHour / 24) * 100}%`;
-                      const width = `${((eHour - sHour) / 24) * 100}%`;
-                      return (
-                        <div
-                          key={slot.id}
-                          className="absolute bottom-1 h-[calc(50%-4px)] rounded-sm bg-red-100 border-2 border-red-500 text-red-700 text-xs flex items-center gap-1 px-2 overflow-hidden z-10 group/bar"
-                          style={{ left, width }}
-                          title={`新規: ${slot.bannerType}`}
-                        >
-                          <span className="truncate">{slot.bannerType}</span>
-                          {!readOnly && (
-                            <button
-                              type="button"
-                              onClick={() => onRemoveSlot(slot.id)}
-                              className="shrink-0 opacity-0 group-hover/bar:opacity-100 transition-opacity hover:text-red-900"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
         {/* 凡例 */}
         <div className="p-3 border-t flex flex-wrap items-center gap-4 text-xs text-muted-foreground bg-muted/20">
           <div className="flex items-center gap-1.5">
@@ -771,40 +578,6 @@ export function SlotCalendar({
               </div>
             </div>
 
-            {/* 時間選択（1時間単位） */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>開始時刻</Label>
-                <Select value={startHour} onValueChange={handleStartHourChange}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {hourOptions.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>終了時刻</Label>
-                <Select value={endHour} onValueChange={setEndHour}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {validEndHourOptions.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
             {/* バナー種別 */}
             <div className="space-y-2">
               <Label>バナー種別</Label>
@@ -824,6 +597,14 @@ export function SlotCalendar({
                 </SelectContent>
               </Select>
             </div>
+
+            {/* 重複エラー表示 */}
+            {overlapError && (
+              <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <span>{overlapError}</span>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={resetSelection}>

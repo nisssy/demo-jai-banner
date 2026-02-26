@@ -45,7 +45,9 @@ export function Step1Proposal({ caseData, onCancel }: Step1ProposalProps) {
   const handleSave = () => {
     updateCase(caseData.id, {
       implementationPolicy,
+      status: "提案中",
     });
+    onCancel();
   };
 
   const handleProceed = () => {
@@ -85,7 +87,7 @@ export function Step1Proposal({ caseData, onCancel }: Step1ProposalProps) {
             <Button variant="outline" onClick={onCancel}>
               キャンセル
             </Button>
-            <Button onClick={handleSave}>登録</Button>
+            <Button onClick={handleSave}>提案内容を登録</Button>
           </div>
         </CardContent>
       </Card>
