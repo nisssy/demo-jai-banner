@@ -55,12 +55,16 @@ import {
   StopCircle,
   Calendar,
   Check,
+  FileText,
+  ClipboardList,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { SlotCalendar } from "@/components/slot-calendar";
 import { ApplicationUpload } from "@/components/application-upload";
 import { MaterialUpload } from "@/components/material-upload";
 import { CaseChat } from "@/components/case-chat";
+import { StatusBadge } from "@/components/status-badge";
+import { GanttCalendar } from "@/components/gantt-calendar";
 import { useCaseStore } from "@/lib/case-store";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
@@ -70,6 +74,8 @@ import {
   initialCompanies,
   initialHalls,
   findOverlappingSlots,
+  bannerTypeOptions,
+  eventTypeOptions,
 } from "@/lib/types";
 import type { CompanyData, HallData } from "@/lib/types";
 import { CompanyHallCombobox } from "@/components/company-hall-combobox";
@@ -79,6 +85,9 @@ import { ja } from "date-fns/locale";
 interface CaseDetailProps {
   caseData: Case;
   onBack: () => void;
+  onBackToList?: () => void;
+  initialSlotId?: string | null;
+  viewType?: "case" | "record";
 }
 
 const circledNumbers =
@@ -95,7 +104,7 @@ interface MaterialState {
   billingAmount: string;
 }
 
-export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
+export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, viewType = "case" }: CaseDetailProps) {
   const {
     addProposalSlot,
     removeProposalSlot,
@@ -157,6 +166,8 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
   const [stopReason, setStopReason] = useState("");
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectComment, setRejectComment] = useState("");
+  const [showApplicationInfoModal, setShowApplicationInfoModal] = useState(false);
+  const [activeRecordSlotId, setActiveRecordSlotId] = useState<string | null>(initialSlotId ?? null);
 
   const initialTab =
     caseData.status === "提案中" || caseData.status === "見送り"
@@ -271,7 +282,7 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
       endDate: now,
       startTime: "10:00",
       endTime: "18:00",
-      bannerType: "メインバナー",
+      bannerType: "バナー各種",
     };
     addProposalSlot(caseData.id, newSlot);
     setMaterialStates((prev) => [
@@ -439,17 +450,531 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
   const hallId = selectedHall?.hallId ?? "";
   const hallSalesPerson = selectedHall?.salesPersonName ?? "";
 
+  // レコード詳細表示の対象スロット
+  const activeSlot = activeRecordSlotId
+    ? caseData.proposalSlots.find(s => s.id === activeRecordSlotId)
+    : null;
+
+  // ステッパーのステップ定義
+  const stepperSteps = [
+    { label: "基本情報登録", done: caseData.status !== "提案中" && caseData.status !== "見送り" },
+    { label: "LINE広告アカウント登録", done: ["事務確認中", "掲載中", "掲載停止", "掲載停止依頼中"].includes(caseData.status) },
+    { label: "配信レポート作成", done: caseData.status === "掲載中" || caseData.status === "掲載停止" },
+  ];
+
+  // 商材詳細のアクティブステップ
+  const [activeStepperStep, setActiveStepperStep] = useState(() => {
+    const firstIncomplete = stepperSteps.findIndex(s => !s.done);
+    return firstIncomplete === -1 ? stepperSteps.length - 1 : firstIncomplete;
+  });
+
+  const projectStatusColor = (() => {
+    switch (caseData.projectStatus) {
+      case "提案中": return "bg-yellow-100 text-yellow-800";
+      case "進行中": return "bg-blue-100 text-blue-800";
+      case "完了": return "bg-green-100 text-green-800";
+      default: return "bg-gray-100 text-gray-800";
+    }
+  })();
+
+  // レコード詳細ビュー
+  if (viewType === "record" && activeSlot) {
+    const slotMaterialState = materialStates.find(m => m.id === activeSlot.id);
+
+    return (
+      <div className="space-y-6">
+        {/* ステッパー + ステータス + 申し込み情報ボタン（固定表示） */}
+        <div className="sticky top-0 z-10 bg-white border-b pb-4 pt-2 -mx-8 px-8 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={onBack}
+                className="p-1 hover:bg-muted rounded-md transition-colors"
+              >
+                <ChevronLeft className="h-6 w-6" />
+              </button>
+              <h1 className="text-xl font-bold">
+                レコード詳細
+                <span className="text-sm font-normal text-muted-foreground ml-2">
+                  #{activeSlot.recordNumber || "-"}
+                </span>
+              </h1>
+              <Badge
+                variant="secondary"
+                className={
+                  caseData.status === "掲載中"
+                    ? "bg-green-600 text-white"
+                    : caseData.status === "差し戻し"
+                      ? "bg-red-100 text-red-800"
+                      : caseData.status === "事務確認中"
+                        ? "bg-purple-100 text-purple-800"
+                        : "bg-blue-100 text-blue-800"
+                }
+              >
+                {statusLabel}
+              </Badge>
+            </div>
+            <div className="flex items-center gap-2">
+              {caseData.applicationDocumentUrl && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowApplicationInfoModal(true)}
+                  className="gap-1"
+                >
+                  <ClipboardList className="h-4 w-4" />
+                  申し込み情報
+                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={onBackToList || onBack}>
+                一覧に戻る
+              </Button>
+            </div>
+          </div>
+
+          {/* ステッパー（添付3のデザイン） */}
+          <div className="flex items-center justify-center gap-0 mt-2">
+            {stepperSteps.map((step, i) => (
+              <div key={step.label} className="flex items-center">
+                <button
+                  type="button"
+                  onClick={() => setActiveStepperStep(i)}
+                  className="flex flex-col items-center gap-2 min-w-[140px]"
+                >
+                  <div className={cn(
+                    "w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold border-2 transition-colors",
+                    step.done
+                      ? "border-green-500 text-green-600 bg-white"
+                      : i === activeStepperStep
+                        ? "border-gray-400 text-gray-500 bg-white"
+                        : "border-gray-300 text-gray-400 bg-white"
+                  )}>
+                    {i + 1}
+                  </div>
+                  <span className={cn(
+                    "text-xs font-medium text-center",
+                    step.done ? "text-green-600" : i === activeStepperStep ? "text-gray-700" : "text-gray-400"
+                  )}>
+                    {step.label}
+                  </span>
+                </button>
+                {i < stepperSteps.length - 1 && (
+                  <div className={cn("w-16 h-0.5 mb-6", step.done ? "bg-green-400" : "bg-gray-200")} />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* レコード基本情報 */}
+        <Card className="p-6">
+          <h2 className="text-lg font-bold mb-4">レコード情報</h2>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="text-muted-foreground">レコード番号:</span>
+              <span className="ml-2 font-mono font-medium">{activeSlot.recordNumber || "-"}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">案件番号:</span>
+              <button
+                type="button"
+                className="ml-2 text-blue-600 hover:underline font-medium"
+                onClick={onBack}
+              >
+                {caseData.caseNumber || "-"}
+              </button>
+            </div>
+            <div>
+              <span className="text-muted-foreground">商材区分:</span>
+              <span className="ml-2">{activeSlot.materialCategory || "-"}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">商材名:</span>
+              <span className="ml-2">{activeSlot.materialName || "-"}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">バナー種別:</span>
+              <span className="ml-2">{activeSlot.bannerType}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">エリア:</span>
+              <span className="ml-2">{activeSlot.areaName || "-"}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">掲載開始日:</span>
+              <span className="ml-2">{format(activeSlot.startDate, "yyyy/MM/dd", { locale: ja })}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">掲載終了日:</span>
+              <span className="ml-2">{format(activeSlot.endDate, "yyyy/MM/dd", { locale: ja })}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">法人名:</span>
+              <span className="ml-2">{caseData.corporateName}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">ホール名:</span>
+              <span className="ml-2">{caseData.storeName}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">担当営業:</span>
+              <span className="ml-2">{caseData.salesPersonName || "山田 太郎"}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">依頼日:</span>
+              <span className="ml-2">{format(caseData.createdAt, "yyyy/MM/dd", { locale: ja })}</span>
+            </div>
+          </div>
+        </Card>
+
+        {/* ステッパーに対応したコンテンツ（カレンダー非表示） */}
+        {slotMaterialState && (
+          <div className="space-y-6">
+            {/* ステップ1: 基本情報登録 */}
+            {activeStepperStep === 0 && (
+              <Card className="p-6 space-y-6">
+                <h3 className="text-base font-semibold flex items-center gap-2">
+                  基本情報
+                  {isReviewPending && <Badge className="bg-purple-100 text-purple-800">事務確認中</Badge>}
+                  {isReviewRejected && <Badge variant="destructive">差し戻し</Badge>}
+                </h3>
+
+                {/* カテゴリ・イベント区分（設定済みなら変更不可） */}
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">カテゴリ</Label>
+                    {activeSlot.materialCategory ? (
+                      <Input value={activeSlot.materialCategory} readOnly className="bg-muted/30" />
+                    ) : (
+                      <Select
+                        value={slotMaterialState.category || undefined}
+                        onValueChange={(val) => {
+                          updateMaterialField(slotMaterialState.id, { category: val });
+                          updateProposalSlot(caseData.id, activeSlot.id, { materialCategory: val as import("@/lib/types").MaterialCategory });
+                        }}
+                      >
+                        <SelectTrigger><SelectValue placeholder="選択してください" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="イベント">イベント</SelectItem>
+                          <SelectItem value="ポイント">ポイント</SelectItem>
+                          <SelectItem value="オプション">オプション</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">イベント区分</Label>
+                    {activeSlot.materialName ? (
+                      <Input value={activeSlot.materialName} readOnly className="bg-muted/30" />
+                    ) : (
+                      <Select
+                        value={slotMaterialState.eventType || undefined}
+                        onValueChange={(val) => {
+                          updateMaterialField(slotMaterialState.id, { eventType: val });
+                          updateProposalSlot(caseData.id, activeSlot.id, { materialName: val });
+                        }}
+                      >
+                        <SelectTrigger><SelectValue placeholder="選択してください" /></SelectTrigger>
+                        <SelectContent>
+                          {eventTypeOptions.map((type) => (
+                            <SelectItem key={type} value={type}>{type}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                </div>
+
+                {/* 申込書 */}
+                {(() => {
+                  const isAnniversary = slotMaterialState.usageMethod === "anniversary";
+                  const selectedPack = isAnniversary
+                    ? corporationPacks.find((p) => p.id === slotMaterialState.selectedPackId)
+                    : null;
+                  return (
+                    <ApplicationUpload
+                      documentUrl={caseData.applicationDocumentUrl}
+                      onUpload={handleUploadApplication}
+                      onRemove={handleRemoveApplication}
+                      readOnly={isReviewPending}
+                      alwaysShowData={true}
+                      isAnniversaryPack={isAnniversary}
+                      anniversaryPackTitle={selectedPack?.title}
+                      anniversaryPackExpiry={
+                        selectedPack
+                          ? format(selectedPack.expiryDate, "yyyy/MM/dd", { locale: ja })
+                          : undefined
+                      }
+                    />
+                  );
+                })()}
+
+                {/* 掲載素材（kintone風テーブル） */}
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold">掲載素材</h4>
+                  <div className="border rounded-lg overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-[#5b9bd5] text-white">
+                          <th className="p-2 text-left font-medium text-xs whitespace-nowrap border-r border-blue-400">掲載開始日_T</th>
+                          <th className="p-2 text-left font-medium text-xs whitespace-nowrap border-r border-blue-400">掲載開始時刻</th>
+                          <th className="p-2 text-left font-medium text-xs whitespace-nowrap border-r border-blue-400">掲載終了日_T</th>
+                          <th className="p-2 text-left font-medium text-xs whitespace-nowrap border-r border-blue-400">掲載終了時刻</th>
+                          <th className="p-2 text-left font-medium text-xs whitespace-nowrap border-r border-blue-400">画像素材</th>
+                          <th className="p-2 text-left font-medium text-xs whitespace-nowrap border-r border-blue-400">備考</th>
+                          <th className="p-2 text-center font-medium text-xs whitespace-nowrap border-r border-blue-400">素材未着</th>
+                          <th className="p-2 text-center font-medium text-xs whitespace-nowrap border-r border-blue-400">掲載処理</th>
+                          <th className="p-2 text-center font-medium text-xs whitespace-nowrap">最終チェック</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {caseData.proposalSlots
+                          .filter(s => s.id === activeSlot.id)
+                          .map((slot, rowIdx) => (
+                            <tr key={`${slot.id}-${rowIdx}`} className="border-t hover:bg-muted/5">
+                              <td className="p-2 border-r">
+                                <Input
+                                  type="date"
+                                  defaultValue={format(slot.startDate, "yyyy-MM-dd")}
+                                  className="h-8 text-xs w-[130px]"
+                                  onChange={(e) => {
+                                    if (e.target.value) {
+                                      handleUpdateSlot(slot.id, { startDate: new Date(e.target.value) });
+                                    }
+                                  }}
+                                />
+                              </td>
+                              <td className="p-2 border-r">
+                                <Input
+                                  type="time"
+                                  defaultValue={slot.startTime || "00:00"}
+                                  className="h-8 text-xs w-[90px]"
+                                  onChange={(e) => handleUpdateSlot(slot.id, { startTime: e.target.value })}
+                                />
+                              </td>
+                              <td className="p-2 border-r">
+                                <Input
+                                  type="date"
+                                  defaultValue={format(slot.endDate, "yyyy-MM-dd")}
+                                  className="h-8 text-xs w-[130px]"
+                                  onChange={(e) => {
+                                    if (e.target.value) {
+                                      handleUpdateSlot(slot.id, { endDate: new Date(e.target.value) });
+                                    }
+                                  }}
+                                />
+                              </td>
+                              <td className="p-2 border-r">
+                                <Input
+                                  type="time"
+                                  defaultValue={slot.endTime || "23:59"}
+                                  className="h-8 text-xs w-[90px]"
+                                  onChange={(e) => handleUpdateSlot(slot.id, { endTime: e.target.value })}
+                                />
+                              </td>
+                              <td className="p-2 border-r">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-blue-600 text-xs hover:underline cursor-pointer">参照</span>
+                                  <span className="text-xs text-muted-foreground">(最大1 GB)</span>
+                                </div>
+                              </td>
+                              <td className="p-2 border-r">
+                                <Input className="h-8 text-xs w-[120px]" placeholder="" />
+                              </td>
+                              <td className="p-2 border-r text-center">
+                                <div className="flex items-center justify-center gap-1">
+                                  <input type="checkbox" className="h-3.5 w-3.5" />
+                                  <span className="text-xs text-muted-foreground">未着</span>
+                                </div>
+                              </td>
+                              <td className="p-2 border-r text-center">
+                                <div className="flex items-center justify-center gap-1">
+                                  <input type="checkbox" className="h-3.5 w-3.5" />
+                                  <span className="text-xs text-muted-foreground">完了</span>
+                                </div>
+                              </td>
+                              <td className="p-2 text-center">
+                                <div className="flex items-center justify-center gap-1">
+                                  <input type="checkbox" className="h-3.5 w-3.5" />
+                                  <span className="text-xs text-muted-foreground">完了</span>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        {/* 追加行（空行） */}
+                        <tr className="border-t hover:bg-muted/5">
+                          <td className="p-2 border-r"><Input type="date" className="h-8 text-xs w-[130px]" /></td>
+                          <td className="p-2 border-r"><Input type="time" defaultValue="00:00" className="h-8 text-xs w-[90px]" /></td>
+                          <td className="p-2 border-r"><Input type="date" className="h-8 text-xs w-[130px]" /></td>
+                          <td className="p-2 border-r"><Input type="time" defaultValue="23:59" className="h-8 text-xs w-[90px]" /></td>
+                          <td className="p-2 border-r">
+                            <div className="flex items-center gap-1">
+                              <span className="text-blue-600 text-xs hover:underline cursor-pointer">参照</span>
+                              <span className="text-xs text-muted-foreground">(最大1 GB)</span>
+                            </div>
+                          </td>
+                          <td className="p-2 border-r"><Input className="h-8 text-xs w-[120px]" placeholder="" /></td>
+                          <td className="p-2 border-r text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <input type="checkbox" className="h-3.5 w-3.5" />
+                              <span className="text-xs text-muted-foreground">未着</span>
+                            </div>
+                          </td>
+                          <td className="p-2 border-r text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <input type="checkbox" className="h-3.5 w-3.5" />
+                              <span className="text-xs text-muted-foreground">完了</span>
+                            </div>
+                          </td>
+                          <td className="p-2 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <input type="checkbox" className="h-3.5 w-3.5" />
+                              <span className="text-xs text-muted-foreground">完了</span>
+                            </div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="flex justify-between pt-4 border-t">
+                  <Button variant="outline" onClick={onBack}>キャンセル</Button>
+                  <div className="flex gap-3">
+                    {!isReviewPending && !isPublishing && (
+                      <Button onClick={handleRequestReview}>
+                        <Send className="mr-2 h-4 w-4" />
+                        事務へ確認依頼
+                      </Button>
+                    )}
+                    <Button onClick={() => setActiveStepperStep(1)}>
+                      次へ
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {/* ステップ2: LINE広告アカウント登録 */}
+            {activeStepperStep === 1 && (
+              <Card className="p-6 space-y-6">
+                <h3 className="text-base font-semibold">LINE広告アカウント登録</h3>
+                <p className="text-sm text-muted-foreground">LINE広告アカウントの設定を行います</p>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm">LINE広告アカウントID</Label>
+                    <Input placeholder="アカウントIDを入力..." />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">キャンペーン名</Label>
+                    <Input placeholder="キャンペーン名を入力..." />
+                  </div>
+                </div>
+                <div className="flex justify-between pt-4 border-t">
+                  <Button variant="outline" onClick={() => setActiveStepperStep(0)}>戻る</Button>
+                  <Button onClick={() => setActiveStepperStep(2)}>次へ</Button>
+                </div>
+              </Card>
+            )}
+
+            {/* ステップ3: 配信レポート作成 */}
+            {activeStepperStep === 2 && (
+              <Card className="p-6 space-y-6">
+                <h3 className="text-base font-semibold">配信レポート作成</h3>
+                <p className="text-sm text-muted-foreground">配信結果のレポートを作成します</p>
+                <div className="p-8 text-center text-muted-foreground border rounded-lg bg-muted/10">
+                  配信完了後にレポートが生成されます
+                </div>
+                <div className="flex justify-between pt-4 border-t">
+                  <Button variant="outline" onClick={() => setActiveStepperStep(1)}>戻る</Button>
+                  <Button variant="outline" onClick={onBack}>完了</Button>
+                </div>
+              </Card>
+            )}
+
+            {/* チャット */}
+            <CaseChat caseData={caseData} slotId={activeSlot.id} />
+          </div>
+        )}
+
+        {/* 申し込み情報モーダル */}
+        <Dialog open={showApplicationInfoModal} onOpenChange={setShowApplicationInfoModal}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>申し込み情報</DialogTitle>
+              <DialogDescription>この商材の申し込み情報です</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-muted-foreground">法人名:</span>
+                  <p className="font-medium">{caseData.corporateName}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">ホール名:</span>
+                  <p className="font-medium">{caseData.storeName}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">商材名:</span>
+                  <p className="font-medium">{activeSlot?.materialName || "-"}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">バナー種別:</span>
+                  <p className="font-medium">{activeSlot?.bannerType || "-"}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">掲載開始日:</span>
+                  <p className="font-medium">{activeSlot ? format(activeSlot.startDate, "yyyy/MM/dd", { locale: ja }) : "-"}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">掲載終了日:</span>
+                  <p className="font-medium">{activeSlot ? format(activeSlot.endDate, "yyyy/MM/dd", { locale: ja }) : "-"}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">請求額:</span>
+                  <p className="font-medium">¥{caseData.billingAmount?.toLocaleString() || "0"}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">担当営業:</span>
+                  <p className="font-medium">{caseData.salesPersonName || "山田 太郎"}</p>
+                </div>
+              </div>
+              {caseData.applicationDocumentUrl && (
+                <div className="pt-2 border-t">
+                  <span className="text-sm text-muted-foreground">申込書:</span>
+                  <p className="text-sm text-blue-600">アップロード済み</p>
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowApplicationInfoModal(false)}>閉じる</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* ヘッダー */}
       <div className="flex items-center gap-3">
         <button
-          onClick={onBack}
+          onClick={onBackToList || onBack}
           className="p-1 hover:bg-muted rounded-md transition-colors"
         >
           <ChevronLeft className="h-6 w-6" />
         </button>
-        <h1 className="text-2xl font-bold">案件編集</h1>
+        <h1 className="text-2xl font-bold">
+          {caseData.storeName} - {caseData.salesPersonName || "山田 太郎"}
+        </h1>
+        <span className="text-sm text-muted-foreground">案件No: {caseData.caseNumber || "-"}</span>
+        <Badge
+          variant="secondary"
+          className={projectStatusColor}
+        >
+          {caseData.projectStatus || "提案中"}
+        </Badge>
         <Badge
           variant="secondary"
           className={
@@ -536,7 +1061,82 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
         </div>
       </Card>
 
-      {/* ===== 商材情報セクション ===== */}
+      {/* ===== 商材一覧テーブル ===== */}
+      <Card className="overflow-hidden">
+        <div className="p-6 pb-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold flex items-center gap-2">
+              商材一覧
+              <Badge variant="secondary" className="font-normal">
+                {caseData.proposalSlots.length}件
+              </Badge>
+            </h2>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleAddMaterial}
+              className="gap-1"
+            >
+              <Plus className="h-4 w-4" />
+              商材を追加
+            </Button>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-muted/30 border-y">
+                <th className="text-left p-3 font-semibold">レコード番号</th>
+                <th className="text-left p-3 font-semibold">商材区分</th>
+                <th className="text-left p-3 font-semibold">商材名</th>
+                <th className="text-left p-3 font-semibold">バナー種別</th>
+                <th className="text-left p-3 font-semibold">掲載開始日</th>
+                <th className="text-left p-3 font-semibold">掲載終了日</th>
+                <th className="text-left p-3 font-semibold">エリア</th>
+                <th className="text-left p-3 font-semibold">ステータス</th>
+              </tr>
+            </thead>
+            <tbody>
+              {caseData.proposalSlots.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="p-6 text-center text-muted-foreground">
+                    商材が登録されていません
+                  </td>
+                </tr>
+              ) : (
+                caseData.proposalSlots.map((slot) => (
+                  <tr key={slot.id} className="border-b hover:bg-muted/10 transition-colors cursor-pointer" onClick={() => setActiveRecordSlotId(slot.id)}>
+                    <td className="p-3">
+                      <span className="text-blue-600 hover:underline font-mono">{slot.recordNumber || "-"}</span>
+                    </td>
+                    <td className="p-3">
+                      {slot.materialCategory && (
+                        <Badge variant="outline" className="font-normal">{slot.materialCategory}</Badge>
+                      )}
+                    </td>
+                    <td className="p-3">{slot.materialName || "-"}</td>
+                    <td className="p-3">{slot.bannerType}</td>
+                    <td className="p-3">{format(slot.startDate, "yyyy/MM/dd", { locale: ja })}</td>
+                    <td className="p-3">{format(slot.endDate, "yyyy/MM/dd", { locale: ja })}</td>
+                    <td className="p-3">{slot.areaName || "-"}</td>
+                    <td className="p-3"><StatusBadge status={caseData.status} /></td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* ===== ガントチャートカレンダー（バナー各種選択時に表示） ===== */}
+      {caseData.proposalSlots.length > 0 && (
+        <GanttCalendar
+          proposalSlots={caseData.proposalSlots}
+          onSelectSlot={(slotId) => setActiveRecordSlotId(slotId)}
+        />
+      )}
+
+      {/* ===== 商材情報セクション（詳細） ===== */}
       {materialStates.map((material, idx) => {
         const thisSlot = caseData.proposalSlots.find(
           (s) => s.id === material.id
@@ -572,55 +1172,77 @@ export function CaseDetail({ caseData, onBack }: CaseDetailProps) {
                     <div className="grid grid-cols-2 gap-6">
                       <div className="space-y-2">
                         <Label className="text-sm font-medium">カテゴリ</Label>
-                        <Select
-                          value={material.category || undefined}
-                          onValueChange={(val) =>
-                            updateMaterialField(material.id, {
-                              category: val,
-                              eventType: "",
-                              usageMethod: "",
-                              selectedPackId: "",
-                              billingAmount: "",
-                            })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="選択してください" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="event">イベント</SelectItem>
-                            <SelectItem value="option">オプション</SelectItem>
-                            <SelectItem value="point">ポイント</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        {/* カテゴリ設定済みの場合は変更不可 */}
+                        {thisSlot?.materialCategory ? (
+                          <Input value={thisSlot.materialCategory} readOnly className="bg-muted/30" />
+                        ) : (
+                          <Select
+                            value={material.category || undefined}
+                            onValueChange={(val) => {
+                              updateMaterialField(material.id, {
+                                category: val,
+                                eventType: "",
+                                usageMethod: "",
+                                selectedPackId: "",
+                                billingAmount: "",
+                              });
+                              // カテゴリをスロットに保存して変更不可にする
+                              const catMap: Record<string, string> = { event: "イベント", option: "オプション", point: "ポイント" };
+                              updateProposalSlot(caseData.id, material.id, {
+                                materialCategory: (catMap[val] || val) as import("@/lib/types").MaterialCategory,
+                              });
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="選択してください" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="event">イベント</SelectItem>
+                              <SelectItem value="option">オプション</SelectItem>
+                              <SelectItem value="point">ポイント</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <Label className="text-sm font-medium">
                           イベント区分
                         </Label>
-                        <Select
-                          value={material.eventType || undefined}
-                          onValueChange={(val) => {
-                            const defaultMethod = hasPacks
-                              ? "anniversary"
-                              : "single";
-                            const defaultPack =
-                              hasPacks && nearestPack ? nearestPack.id : "";
-                            updateMaterialField(material.id, {
-                              eventType: val,
-                              usageMethod: defaultMethod,
-                              selectedPackId: defaultPack,
-                              billingAmount: "",
-                            });
-                          }}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="選択してください" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="バナー各種">バナー各種</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        {/* イベント区分設定済みの場合は変更不可 */}
+                        {thisSlot?.materialName ? (
+                          <Input value={thisSlot.materialName} readOnly className="bg-muted/30" />
+                        ) : (
+                          <Select
+                            value={material.eventType || undefined}
+                            onValueChange={(val) => {
+                              const defaultMethod = hasPacks
+                                ? "anniversary"
+                                : "single";
+                              const defaultPack =
+                                hasPacks && nearestPack ? nearestPack.id : "";
+                              updateMaterialField(material.id, {
+                                eventType: val,
+                                usageMethod: defaultMethod,
+                                selectedPackId: defaultPack,
+                                billingAmount: "",
+                              });
+                              // イベント区分をスロットに保存して変更不可にする
+                              updateProposalSlot(caseData.id, material.id, {
+                                bannerType: val as import("@/lib/types").BannerType,
+                                materialName: val,
+                              });
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="選択してください" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {eventTypeOptions.map((type) => (
+                                <SelectItem key={type} value={type}>{type}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
                       </div>
                     </div>
 

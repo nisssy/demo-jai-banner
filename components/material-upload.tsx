@@ -123,9 +123,31 @@ function SlotUploadRow({
   return (
     <div className="rounded-lg border bg-card">
       {/* 枠の日程情報ヘッダー */}
-      <div className="flex items-center gap-4 border-b bg-muted/30 px-4 py-3">
-        <div className="grid grid-cols-4 gap-3 flex-1">
-          <div>
+      <div className="border-b bg-muted/30 px-4 py-3 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="flex-shrink-0">
+              {slot.bannerType}
+            </Badge>
+            {slot.areaName && (
+              <Badge variant="outline" className="flex-shrink-0">
+                {slot.areaName}
+              </Badge>
+            )}
+          </div>
+          {!readOnly && onRemoveSlot && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 flex-shrink-0 text-muted-foreground hover:text-red-600"
+              onClick={() => onRemoveSlot(slot.id)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="min-w-0">
             <p className="text-xs text-muted-foreground mb-0.5">掲載開始日</p>
             {!readOnly && onUpdateSlot ? (
               <Input
@@ -135,7 +157,7 @@ function SlotUploadRow({
                   const val = e.target.value;
                   if (val) onUpdateSlot(slot.id, { startDate: new Date(val + "T00:00:00") });
                 }}
-                className="h-7 text-sm w-[140px]"
+                className="h-7 text-sm"
               />
             ) : (
               <p className="text-sm font-medium">
@@ -143,7 +165,7 @@ function SlotUploadRow({
               </p>
             )}
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-xs text-muted-foreground mb-0.5">掲載終了日</p>
             {!readOnly && onUpdateSlot ? (
               <Input
@@ -153,7 +175,7 @@ function SlotUploadRow({
                   const val = e.target.value;
                   if (val) onUpdateSlot(slot.id, { endDate: new Date(val + "T00:00:00") });
                 }}
-                className="h-7 text-sm w-[140px]"
+                className="h-7 text-sm"
               />
             ) : (
               <p className="text-sm font-medium">
@@ -163,27 +185,27 @@ function SlotUploadRow({
           </div>
           {onUpdateSlot && (
             <>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-muted-foreground mb-0.5">開始時刻</p>
                 {!readOnly ? (
                   <Input
                     type="time"
                     value={slot.startTime || ""}
                     onChange={(e) => onUpdateSlot(slot.id, { startTime: e.target.value })}
-                    className="h-7 text-sm w-[120px]"
+                    className="h-7 text-sm"
                   />
                 ) : (
                   <p className="text-sm font-medium">{slot.startTime || "—"}</p>
                 )}
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-muted-foreground mb-0.5">終了時刻</p>
                 {!readOnly ? (
                   <Input
                     type="time"
                     value={slot.endTime || ""}
                     onChange={(e) => onUpdateSlot(slot.id, { endTime: e.target.value })}
-                    className="h-7 text-sm w-[120px]"
+                    className="h-7 text-sm"
                   />
                 ) : (
                   <p className="text-sm font-medium">{slot.endTime || "—"}</p>
@@ -192,24 +214,6 @@ function SlotUploadRow({
             </>
           )}
         </div>
-        <Badge variant="secondary" className="flex-shrink-0">
-          {slot.bannerType}
-        </Badge>
-        {slot.areaName && (
-          <Badge variant="outline" className="flex-shrink-0">
-            {slot.areaName}
-          </Badge>
-        )}
-        {!readOnly && onRemoveSlot && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 flex-shrink-0 text-muted-foreground hover:text-red-600"
-            onClick={() => onRemoveSlot(slot.id)}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        )}
       </div>
 
       {/* 画像素材アップロード領域 */}

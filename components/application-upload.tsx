@@ -62,7 +62,7 @@ const sampleApplicationData: ApplicationData = {
   contractAmount: "450,000",
   startDate: "2026-02-01",
   endDate: "2026-02-28",
-  bannerType: "メインバナー",
+  bannerType: "バナー各種",
   contactPerson: "山田太郎",
   contactEmail: "yamada@sample.co.jp",
   notes: "特記事項なし",

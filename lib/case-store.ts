@@ -60,11 +60,14 @@ export const useCaseStore = create<CaseStore>((set, get) => ({
   setViewMode: (mode) => set({ viewMode: mode }),
   
   createCase: (corporateName, storeName, additionalData) => {
+    const caseNum = get().cases.length + 1;
     const newCase: Case = {
       id: `case-${Date.now()}`,
+      caseNumber: `PJ-${String(caseNum).padStart(3, "0")}`,
       corporateName,
       storeName,
       status: "提案中",
+      projectStatus: "提案中",
       createdAt: new Date(),
       updatedAt: new Date(),
       proposalSlots: [],

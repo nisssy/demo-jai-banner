@@ -204,7 +204,89 @@ export type CaseStatus =
   | "掲載停止";
 
 // バナー種別
-export type BannerType = "バナー各種";
+export type BannerType =
+  | "バナー各種"
+  | "【FP課】マイページバナー"
+  | "お知らせバナー"
+  | "サブバナー"
+  | "スプラッシュバナー"
+  | "マイページバナー"
+  | "メインバナー"
+  | "ローテーションバナー"
+  | "動画バナー"
+  | "取材来店バナー"
+  | "都道府県バナー";
+
+export const bannerTypeOptions: BannerType[] = [
+  "バナー各種",
+  "【FP課】マイページバナー",
+  "お知らせバナー",
+  "サブバナー",
+  "スプラッシュバナー",
+  "マイページバナー",
+  "メインバナー",
+  "ローテーションバナー",
+  "動画バナー",
+  "取材来店バナー",
+  "都道府県バナー",
+];
+
+// イベント区分の選択肢
+export const eventTypeOptions: BannerType[] = [
+  "バナー各種",
+];
+
+// 商材区分
+export type MaterialCategory = "イベント" | "ポイント" | "オプション";
+
+export const materialCategoryOptions: MaterialCategory[] = [
+  "イベント",
+  "ポイント",
+  "オプション",
+];
+
+// 商材名の選択肢
+export const materialNameOptions: string[] = [
+  "トリニティーガール",
+  "合同抽選会",
+  "LINE広告",
+  "お知らせバナー",
+  "メインバナー",
+  "サブバナー",
+  "スプラッシュバナー",
+  "マイページバナー",
+  "ローテーションバナー",
+  "動画バナー",
+  "取材来店バナー",
+  "都道府県バナー",
+];
+
+// 案件プロジェクトステータス
+export type CaseProjectStatus = "提案中" | "進行中" | "完了";
+
+// 保存済み検索条件
+export interface SavedSearchCondition {
+  id: string;
+  name: string;
+  conditions: SearchConditions;
+  createdAt: Date;
+}
+
+export interface SearchConditions {
+  corporate: string;
+  hall: string;
+  area: string;
+  statuses: string[];
+  materialCategory: string;
+  materialName: string;
+  dateStart: string;
+  dateEnd: string;
+  staff: string;
+  caseNo: string;
+  caseName: string;
+  caseNumber: string;
+  recordNumber: string;
+}
 
 // エリア
 export interface AreaSlot {
@@ -237,6 +319,9 @@ export interface ProposalSlot {
   startTime?: string; // "HH:mm" format (optional)
   endTime?: string; // "HH:mm" format (optional)
   bannerType: BannerType;
+  recordNumber?: string;
+  materialCategory?: MaterialCategory;
+  materialName?: string;
 }
 
 // チャットメッセージ
@@ -251,16 +336,55 @@ export interface ChatMessage {
   isSystemMessage?: boolean;
 }
 
+// 部やエリア
+export type AreaRegion =
+  | "北海道"
+  | "東北"
+  | "関東①"
+  | "関東②"
+  | "関東③"
+  | "東海①"
+  | "東海②"
+  | "関西①"
+  | "関西②"
+  | "関西③"
+  | "北陸"
+  | "中国"
+  | "九州①"
+  | "九州②"
+  | "大手法人";
+
+export const areaRegionOptions: AreaRegion[] = [
+  "北海道",
+  "東北",
+  "関東①",
+  "関東②",
+  "関東③",
+  "東海①",
+  "東海②",
+  "関西①",
+  "関西②",
+  "関西③",
+  "北陸",
+  "中国",
+  "九州①",
+  "九州②",
+  "大手法人",
+];
+
 // 案件
 export interface Case {
   id: string;
+  caseNumber?: string;
   caseName?: string;
   corporateName: string;
   storeName: string;
   companyId?: string;
   hallId?: string;
   salesPersonName?: string;
+  areaRegion?: AreaRegion;
   status: CaseStatus;
+  projectStatus?: CaseProjectStatus;
   createdAt: Date;
   updatedAt: Date;
   proposalSlots: ProposalSlot[];
@@ -388,45 +512,54 @@ export const mockAreaSlots: AreaSlot[] = [
 
 // 既存の予約
 export const mockBookings: SlotBooking[] = [
-  { id: "bk-1", areaSlotId: "area-1", bannerType: "バナー各種", hallName: "マルハン渋谷店", startDate: new Date("2026-02-01"), endDate: new Date("2026-02-07"), startHour: 0, endHour: 24, bookingStatus: "確定" },
-  { id: "bk-2", areaSlotId: "area-1", bannerType: "バナー各種", hallName: "ダイナム渋谷店", startDate: new Date("2026-02-10"), endDate: new Date("2026-02-22"), startHour: 0, endHour: 24, bookingStatus: "確定" },
-  { id: "bk-3", areaSlotId: "area-2", bannerType: "バナー各種", hallName: "ガイア渋谷店", startDate: new Date("2026-02-05"), endDate: new Date("2026-02-14"), startHour: 0, endHour: 24, bookingStatus: "確定" },
-  { id: "bk-4", areaSlotId: "area-3", bannerType: "バナー各種", hallName: "エース新宿店", startDate: new Date("2026-02-01"), endDate: new Date("2026-02-10"), startHour: 0, endHour: 24, bookingStatus: "仮押さえ" },
-  { id: "bk-5", areaSlotId: "area-5", bannerType: "バナー各種", hallName: "マルハン池袋店", startDate: new Date("2026-02-15"), endDate: new Date("2026-02-25"), startHour: 0, endHour: 24, bookingStatus: "確定" },
-  { id: "bk-6", areaSlotId: "area-6", bannerType: "バナー各種", hallName: "サンライズ池袋店", startDate: new Date("2026-03-01"), endDate: new Date("2026-03-10"), startHour: 0, endHour: 24, bookingStatus: "仮押さえ" },
-  { id: "bk-7", areaSlotId: "area-7", bannerType: "バナー各種", hallName: "ビッグエース品川店", startDate: new Date("2026-02-08"), endDate: new Date("2026-02-18"), startHour: 0, endHour: 24, bookingStatus: "確定" },
-  { id: "bk-8", areaSlotId: "area-9", bannerType: "バナー各種", hallName: "ダイナム横浜店", startDate: new Date("2026-02-03"), endDate: new Date("2026-02-12"), startHour: 0, endHour: 24, bookingStatus: "確定" },
-  { id: "bk-9", areaSlotId: "area-11", bannerType: "バナー各種", hallName: "マルハン梅田店", startDate: new Date("2026-02-10"), endDate: new Date("2026-02-20"), startHour: 0, endHour: 24, bookingStatus: "仮押さえ" },
+  { id: "bk-1", areaSlotId: "area-1", bannerType: "メインバナー", hallName: "マルハン渋谷店", startDate: new Date("2026-02-01"), endDate: new Date("2026-02-07"), startHour: 0, endHour: 24, bookingStatus: "確定" },
+  { id: "bk-2", areaSlotId: "area-1", bannerType: "サブバナー", hallName: "ダイナム渋谷店", startDate: new Date("2026-02-10"), endDate: new Date("2026-02-22"), startHour: 0, endHour: 24, bookingStatus: "確定" },
+  { id: "bk-3", areaSlotId: "area-2", bannerType: "お知らせバナー", hallName: "ガイア渋谷店", startDate: new Date("2026-02-05"), endDate: new Date("2026-02-14"), startHour: 0, endHour: 24, bookingStatus: "確定" },
+  { id: "bk-4", areaSlotId: "area-3", bannerType: "スプラッシュバナー", hallName: "エース新宿店", startDate: new Date("2026-02-01"), endDate: new Date("2026-02-10"), startHour: 0, endHour: 24, bookingStatus: "仮押さえ" },
+  { id: "bk-5", areaSlotId: "area-5", bannerType: "マイページバナー", hallName: "マルハン池袋店", startDate: new Date("2026-02-15"), endDate: new Date("2026-02-25"), startHour: 0, endHour: 24, bookingStatus: "確定" },
+  { id: "bk-6", areaSlotId: "area-6", bannerType: "ローテーションバナー", hallName: "サンライズ池袋店", startDate: new Date("2026-03-01"), endDate: new Date("2026-03-10"), startHour: 0, endHour: 24, bookingStatus: "仮押さえ" },
+  { id: "bk-7", areaSlotId: "area-7", bannerType: "動画バナー", hallName: "ビッグエース品川店", startDate: new Date("2026-02-08"), endDate: new Date("2026-02-18"), startHour: 0, endHour: 24, bookingStatus: "確定" },
+  { id: "bk-8", areaSlotId: "area-9", bannerType: "取材来店バナー", hallName: "ダイナム横浜店", startDate: new Date("2026-02-03"), endDate: new Date("2026-02-12"), startHour: 0, endHour: 24, bookingStatus: "確定" },
+  { id: "bk-9", areaSlotId: "area-11", bannerType: "都道府県バナー", hallName: "マルハン梅田店", startDate: new Date("2026-02-10"), endDate: new Date("2026-02-20"), startHour: 0, endHour: 24, bookingStatus: "仮押さえ" },
 ];
 
 export const mockCases: Case[] = [
   {
     id: "case-1",
+    caseNumber: "PJ-001",
     corporateName: "株式会社サンプル",
     storeName: "東京本店",
+    areaRegion: "関東①",
     status: "提案中",
+    projectStatus: "提案中",
     createdAt: new Date("2026-01-15"),
     updatedAt: new Date("2026-01-20"),
     proposalSlots: [
       {
         id: "slot-1",
+        recordNumber: "13817",
         areaSlotId: "area-1",
         areaName: "渋谷エリアA枠",
         startDate: new Date("2026-02-01"),
         endDate: new Date("2026-02-15"),
         startTime: "09:00",
         endTime: "18:00",
-        bannerType: "バナー各種",
+        bannerType: "メインバナー",
+        materialCategory: "イベント",
+        materialName: "トリニティーガール",
       },
       {
         id: "slot-1b",
+        recordNumber: "13818",
         areaSlotId: "area-3",
         areaName: "新宿エリアA枠",
         startDate: new Date("2026-02-05"),
         endDate: new Date("2026-02-20"),
         startTime: "10:00",
         endTime: "22:00",
-        bannerType: "バナー各種",
+        bannerType: "サブバナー",
+        materialCategory: "イベント",
+        materialName: "合同抽選会",
       },
     ],
     aiRecommendedSlots: [
@@ -436,148 +569,190 @@ export const mockCases: Case[] = [
         endDate: new Date("2026-02-20"),
         startTime: "10:00",
         endTime: "17:00",
-        bannerType: "バナー各種",
+        bannerType: "メインバナー",
       },
     ],
   },
   {
     id: "case-2",
+    caseNumber: "PJ-002",
     corporateName: "株式会社テスト",
     storeName: "渋谷店",
+    areaRegion: "関東②",
     status: "配信準備中",
+    projectStatus: "進行中",
     createdAt: new Date("2026-01-10"),
     updatedAt: new Date("2026-01-25"),
     proposalSlots: [
       {
         id: "slot-2a",
+        recordNumber: "13819",
         areaSlotId: "area-2",
         areaName: "渋谷エリアB枠",
         startDate: new Date("2026-02-05"),
         endDate: new Date("2026-02-28"),
         startTime: "10:00",
         endTime: "20:00",
-        bannerType: "バナー各種",
+        bannerType: "お知らせバナー",
+        materialCategory: "イベント",
+        materialName: "LINE広告",
       },
       {
         id: "slot-2b",
+        recordNumber: "13820",
         areaSlotId: "area-5",
         areaName: "池袋エリアA枠",
         startDate: new Date("2026-02-10"),
         endDate: new Date("2026-02-25"),
         startTime: "00:00",
         endTime: "23:59",
-        bannerType: "バナー各種",
+        bannerType: "マイページバナー",
+        materialCategory: "ポイント",
+        materialName: "お知らせバナー",
       },
       {
         id: "slot-2c",
+        recordNumber: "13821",
         areaSlotId: "area-9",
         areaName: "横浜エリアA枠",
         startDate: new Date("2026-03-01"),
         endDate: new Date("2026-03-15"),
         startTime: "08:00",
         endTime: "20:00",
-        bannerType: "バナー各種",
+        bannerType: "スプラッシュバナー",
+        materialCategory: "オプション",
+        materialName: "メインバナー",
       },
     ],
   },
   {
     id: "case-3",
+    caseNumber: "PJ-003",
     corporateName: "ABC商事株式会社",
     storeName: "銀座店",
+    areaRegion: "関東③",
     status: "事務確認中",
+    projectStatus: "進行中",
     createdAt: new Date("2026-01-05"),
     updatedAt: new Date("2026-01-30"),
     proposalSlots: [
       {
         id: "slot-3a",
+        recordNumber: "13822",
         areaSlotId: "area-1",
         areaName: "渋谷エリアA枠",
         startDate: new Date("2026-03-01"),
         endDate: new Date("2026-03-15"),
         startTime: "08:00",
         endTime: "22:00",
-        bannerType: "バナー各種",
+        bannerType: "ローテーションバナー",
+        materialCategory: "イベント",
+        materialName: "トリニティーガール",
       },
       {
         id: "slot-3b",
+        recordNumber: "13823",
         areaSlotId: "area-7",
         areaName: "品川エリアA枠",
         startDate: new Date("2026-03-05"),
         endDate: new Date("2026-03-20"),
         startTime: "09:00",
         endTime: "21:00",
-        bannerType: "バナー各種",
+        bannerType: "動画バナー",
+        materialCategory: "イベント",
+        materialName: "合同抽選会",
       },
     ],
     adminReviewStatus: "pending",
   },
   {
     id: "case-4",
+    caseNumber: "PJ-004",
     corporateName: "株式会社サンプル",
     storeName: "大阪支店",
+    areaRegion: "関西①",
     status: "掲載中",
+    projectStatus: "完了",
     createdAt: new Date("2025-12-20"),
     updatedAt: new Date("2026-01-15"),
     proposalSlots: [
       {
         id: "slot-4a",
+        recordNumber: "13824",
         areaSlotId: "area-11",
         areaName: "梅田エリアA枠",
         startDate: new Date("2026-01-15"),
         endDate: new Date("2026-02-15"),
         startTime: "09:00",
         endTime: "21:00",
-        bannerType: "バナー各種",
+        bannerType: "都道府県バナー",
+        materialCategory: "イベント",
+        materialName: "メインバナー",
       },
       {
         id: "slot-4b",
+        recordNumber: "13825",
         areaSlotId: "area-12",
         areaName: "梅田エリアB枠",
         startDate: new Date("2026-01-20"),
         endDate: new Date("2026-02-20"),
         startTime: "10:00",
         endTime: "20:00",
-        bannerType: "バナー各種",
+        bannerType: "取材来店バナー",
+        materialCategory: "オプション",
+        materialName: "取材来店バナー",
       },
     ],
     adminReviewStatus: "approved",
   },
   {
     id: "case-5",
+    caseNumber: "PJ-005",
     corporateName: "株式会社テスト",
     storeName: "新宿店",
+    areaRegion: "関東①",
     status: "見送り",
+    projectStatus: "完了",
     createdAt: new Date("2025-12-15"),
     updatedAt: new Date("2026-01-10"),
     proposalSlots: [],
   },
   {
     id: "case-6",
+    caseNumber: "PJ-006",
     corporateName: "株式会社サンプル",
     storeName: "名古屋支店",
+    areaRegion: "東海①",
     status: "差し戻し",
+    projectStatus: "進行中",
     createdAt: new Date("2026-01-08"),
     updatedAt: new Date("2026-01-28"),
     proposalSlots: [
       {
         id: "slot-6a",
+        recordNumber: "13826",
         areaSlotId: "area-4",
         areaName: "新宿エリアB枠",
         startDate: new Date("2026-02-20"),
         endDate: new Date("2026-03-05"),
         startTime: "12:00",
         endTime: "18:00",
-        bannerType: "バナー各種",
+        bannerType: "【FP課】マイページバナー",
+        materialCategory: "ポイント",
+        materialName: "マイページバナー",
       },
       {
         id: "slot-6b",
+        recordNumber: "13827",
         areaSlotId: "area-6",
         areaName: "池袋エリアB枠",
         startDate: new Date("2026-02-25"),
         endDate: new Date("2026-03-10"),
         startTime: "09:00",
         endTime: "23:00",
-        bannerType: "バナー各種",
+        bannerType: "メインバナー",
+        materialCategory: "イベント",
+        materialName: "メインバナー",
       },
     ],
     adminReviewStatus: "rejected",

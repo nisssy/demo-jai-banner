@@ -21,6 +21,7 @@ import {
 import { ChevronLeft, ChevronUp, ChevronDown, Plus } from "lucide-react";
 import { useCaseStore } from "@/lib/case-store";
 import type { ProposalSlot, BannerType } from "@/lib/types";
+import { bannerTypeOptions, eventTypeOptions } from "@/lib/types";
 
 interface MaterialAddFormProps {
   caseId: string;
@@ -53,7 +54,7 @@ function createEmptyMaterial(id: string): MaterialFormItem {
     id,
     isOpen: true,
     category: "event",
-    eventType: "trinity",
+    eventType: "バナー各種",
     materialName: "",
     implementDate: "",
     mustSeeFlag: "0",
@@ -68,9 +69,9 @@ function createEmptyMaterial(id: string): MaterialFormItem {
   };
 }
 
-const bannerTypeMap: Record<string, BannerType> = {
-  "バナー各種": "バナー各種",
-};
+const bannerTypeMap: Record<string, BannerType> = Object.fromEntries(
+  bannerTypeOptions.map((t) => [t, t])
+);
 
 export function MaterialAddForm({ caseId, onBack }: MaterialAddFormProps) {
   const { addProposalSlot } = useCaseStore();
@@ -196,7 +197,9 @@ export function MaterialAddForm({ caseId, onBack }: MaterialAddFormProps) {
                         <SelectValue placeholder="イベント区分を検索..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="バナー各種">バナー各種</SelectItem>
+                        {eventTypeOptions.map((type) => (
+                          <SelectItem key={type} value={type}>{type}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

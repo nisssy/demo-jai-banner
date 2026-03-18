@@ -20,7 +20,7 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { ChevronLeft, ChevronUp, ChevronDown, Plus } from "lucide-react";
-import { mockAnniversaryPacks, initialCompanies, initialHalls } from "@/lib/types";
+import { mockAnniversaryPacks, initialCompanies, initialHalls, bannerTypeOptions, eventTypeOptions } from "@/lib/types";
 import type { CompanyData, HallData } from "@/lib/types";
 import { CompanyHallCombobox } from "@/components/company-hall-combobox";
 import { useCaseStore } from "@/lib/case-store";
@@ -124,7 +124,6 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
     // 商材情報：全ての商材でカテゴリ・イベント区分・利用方法が入力済みか
     const allMaterialsFilled = materials.every((m) => {
       if (!m.category || !m.eventType || !m.usageMethod) return false;
-      if (m.usageMethod === "single" && !m.billingAmount) return false;
       if (m.usageMethod === "anniversary" && !m.selectedPackId) return false;
       return true;
     });
@@ -339,7 +338,9 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
                           <SelectValue placeholder="選択してください" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="バナー各種">バナー各種</SelectItem>
+                          {eventTypeOptions.map((type) => (
+                            <SelectItem key={type} value={type}>{type}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -449,37 +450,13 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
                               id={`new-usage-single-${material.id}`}
                               className="mt-0.5"
                             />
-                            <div className="flex-1 space-y-3">
+                            <div className="flex-1">
                               <Label
                                 htmlFor={`new-usage-single-${material.id}`}
                                 className="text-sm font-medium cursor-pointer"
                               >
                                 単発で実施
                               </Label>
-
-                              {material.usageMethod === "single" && (
-                                <div className="space-y-2 pt-1">
-                                  <Label className="text-xs text-muted-foreground">
-                                    請求額
-                                  </Label>
-                                  <div className="relative max-w-xs">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                                      ¥
-                                    </span>
-                                    <Input
-                                      type="text"
-                                      inputMode="numeric"
-                                      placeholder="0"
-                                      className="pl-7"
-                                      value={material.billingAmount}
-                                      onChange={(e) => {
-                                        const val = e.target.value.replace(/[^0-9]/g, "");
-                                        updateMaterialFields(material.id, { billingAmount: val });
-                                      }}
-                                    />
-                                  </div>
-                                </div>
-                              )}
                             </div>
                           </div>
                         </RadioGroup>

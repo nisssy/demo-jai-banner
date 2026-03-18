@@ -7,14 +7,16 @@ import { NewCaseForm } from "@/components/new-case-form";
 import { useCaseStore } from "@/lib/case-store";
 import { Badge } from "@/components/ui/badge";
 import { List, RefreshCw, ArrowRightLeft, Crown } from "lucide-react";
+import type { ProposalSlot, MaterialCategory } from "@/lib/types";
 
-type ViewMode = "list" | "detail" | "create";
+type ViewMode = "list" | "detail" | "create" | "record";
 
 export default function Home() {
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [viewMode, setLocalViewMode] = useState<ViewMode>("list");
   const [isAdminMode, setIsAdminMode] = useState(false);
-  const { cases, setSelectedCase, setCurrentStep, setViewMode } = useCaseStore();
+  const { cases, setSelectedCase, setCurrentStep, setViewMode, addProposalSlot } = useCaseStore();
 
   const selectedCase = cases.find((c) => c.id === selectedCaseId);
 
@@ -30,6 +32,7 @@ export default function Home() {
 
   const handleSelectCase = (caseId: string) => {
     setSelectedCaseId(caseId);
+    setSelectedSlotId(null);
     setLocalViewMode("detail");
     const caseItem = cases.find((c) => c.id === caseId);
     if (caseItem) {
@@ -41,8 +44,36 @@ export default function Home() {
     }
   };
 
+  const handleSelectRecord = (caseId: string, slotId: string) => {
+    setSelectedCaseId(caseId);
+    setSelectedSlotId(slotId);
+    setLocalViewMode("record");
+    const caseItem = cases.find((c) => c.id === caseId);
+    if (caseItem) {
+      if (caseItem.status === "提案中" || caseItem.status === "見送り") {
+        setCurrentStep(1);
+      } else {
+        setCurrentStep(2);
+      }
+    }
+  };
+
   const handleBack = () => {
+    if (viewMode === "record") {
+      // レコード詳細から案件詳細に戻る
+      setSelectedSlotId(null);
+      setLocalViewMode("detail");
+      return;
+    }
     setSelectedCaseId(null);
+    setSelectedSlotId(null);
+    setSelectedCase(null);
+    setLocalViewMode("list");
+  };
+
+  const handleBackToList = () => {
+    setSelectedCaseId(null);
+    setSelectedSlotId(null);
     setSelectedCase(null);
     setLocalViewMode("list");
   };
@@ -52,10 +83,37 @@ export default function Home() {
   };
 
   const handleCaseCreated = (caseId: string) => {
-    // 作成後は一覧画面に戻る
     setSelectedCaseId(null);
     setSelectedCase(null);
     setLocalViewMode("list");
+  };
+
+  const handleAddNewMaterial = (caseId: string, materialCategory: string, materialName: string) => {
+    const newSlotId = `slot-${Date.now()}`;
+    const recordNum = String(13828 + Math.floor(Math.random() * 1000));
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 7);
+
+    const newSlot: ProposalSlot = {
+      id: newSlotId,
+      recordNumber: recordNum,
+      startDate: now,
+      endDate: tomorrow,
+      startTime: "10:00",
+      endTime: "18:00",
+      bannerType: "バナー各種",
+      materialCategory: materialCategory as MaterialCategory,
+      materialName: materialName,
+    };
+
+    addProposalSlot(caseId, newSlot);
+
+    // 商材詳細画面（レコード詳細）に遷移
+    setSelectedCaseId(caseId);
+    setSelectedSlotId(newSlotId);
+    setLocalViewMode("record");
+    setCurrentStep(2);
   };
 
   const handleDemoReset = () => {
@@ -116,10 +174,10 @@ export default function Home() {
               <button
                 type="button"
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md bg-muted"
-                onClick={handleBack}
+                onClick={handleBackToList}
               >
                 <List className="h-4 w-4" />
-                案件一覧
+                レコード一覧
               </button>
             </nav>
           </aside>
@@ -127,16 +185,24 @@ export default function Home() {
 
         {/* メインコンテンツ */}
         <main className={`flex-1 p-8 ${isListView ? "" : "max-w-5xl mx-auto"}`}>
-          {viewMode === "detail" && selectedCase ? (
-            <CaseDetail caseData={selectedCase} onBack={handleBack} />
+          {(viewMode === "detail" || viewMode === "record") && selectedCase ? (
+            <CaseDetail
+              caseData={selectedCase}
+              onBack={handleBack}
+              onBackToList={handleBackToList}
+              initialSlotId={selectedSlotId}
+              viewType={viewMode === "record" ? "record" : "case"}
+            />
           ) : viewMode === "create" ? (
-            <NewCaseForm onBack={handleBack} onCaseCreated={handleCaseCreated} />
+            <NewCaseForm onBack={handleBackToList} onCaseCreated={handleCaseCreated} />
           ) : (
-            <div className="max-w-5xl">
+            <div className="max-w-7xl">
               <CaseList
                 onSelectCase={handleSelectCase}
                 onOpenCreateForm={handleOpenCreateForm}
                 onAddMaterial={handleSelectCase}
+                onSelectRecord={handleSelectRecord}
+                onAddNewMaterial={handleAddNewMaterial}
               />
             </div>
           )}

@@ -22,7 +22,7 @@ import { Label } from "@/components/ui/label";
 import { ChevronLeft, ChevronRight, Clock, Sparkles, X, Filter, MousePointerClick, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ProposalSlot, BannerType, AreaSlot } from "@/lib/types";
-import { mockAreaSlots, mockBookings, findOverlappingSlots } from "@/lib/types";
+import { mockAreaSlots, mockBookings, findOverlappingSlots, bannerTypeOptions } from "@/lib/types";
 import {
   format,
   addMonths,
@@ -45,14 +45,10 @@ interface SlotCalendarProps {
   readOnly?: boolean;
 }
 
-const allBannerTypes: BannerType[] = [
-  "バナー各種",
-];
-
 // 絞り込み用のバナー種別リスト
 const filterBannerOptions: (BannerType | "すべて")[] = [
   "すべて",
-  ...allBannerTypes,
+  ...bannerTypeOptions,
 ];
 
 
@@ -589,7 +585,7 @@ export function SlotCalendar({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {allBannerTypes.map((type) => (
+                  {bannerTypeOptions.map((type) => (
                     <SelectItem key={type} value={type}>
                       {type}
                     </SelectItem>
