@@ -10,7 +10,8 @@
       "Bash(wc:*)",
       "Bash(npx tsc:*)",
       "Bash(./node_modules/.bin/tsc:*)",
-      "Bash(npx --no next build)"
+      "Bash(npx --no next build)",
+      "Bash(npm install:*)"
     ]
   }
 }

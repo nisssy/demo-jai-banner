@@ -118,16 +118,20 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
   };
 
   // フォーム全体のバリデーション（ホールのみオプショナル、それ以外は必須）
+  // 商材情報は任意：未入力の商材はスキップし、入力途中の商材のみバリデーション
   const isFormValid = (() => {
     if (!selectedCompany) return false;
     if (!caseName.trim()) return false;
-    // 商材情報：全ての商材でカテゴリ・イベント区分・利用方法が入力済みか
-    const allMaterialsFilled = materials.every((m) => {
+    // 商材情報：一部でも入力されている商材は全項目必須
+    const partiallyFilledMaterials = materials.filter(
+      (m) => m.category || m.eventType || m.usageMethod
+    );
+    const allPartialValid = partiallyFilledMaterials.every((m) => {
       if (!m.category || !m.eventType || !m.usageMethod) return false;
       if (m.usageMethod === "anniversary" && !m.selectedPackId) return false;
       return true;
     });
-    if (!allMaterialsFilled) return false;
+    if (!allPartialValid) return false;
     return true;
   })();
 
@@ -146,9 +150,11 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
   const handleSubmit = () => {
     if (!isFormValid || !selectedCompany) return;
 
-    // フォームの商材情報を ProposalSlot に変換
-    const proposalSlots = materials
-      .filter((m) => m.eventType) // イベント区分が選択されたもののみ
+    // フォームの商材情報を ProposalSlot に変換（入力済みの商材のみ）
+    const filledMaterials = materials.filter(
+      (m) => m.category && m.eventType && m.usageMethod
+    );
+    const proposalSlots = filledMaterials
       .map((m) => ({
         id: `slot-${Date.now()}-${m.id}`,
         startDate: new Date(),
@@ -157,14 +163,14 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
       }));
 
     // 請求額の合計を計算
-    const totalBilling = materials.reduce((sum, m) => {
+    const totalBilling = filledMaterials.reduce((sum, m) => {
       const amount = m.billingAmount ? Number(m.billingAmount) : 0;
       return sum + amount;
     }, 0);
 
     // 周年パック利用かどうか
-    const hasAnniversary = materials.some((m) => m.usageMethod === "anniversary");
-    const anniversaryPackId = materials.find((m) => m.selectedPackId)?.selectedPackId;
+    const hasAnniversary = filledMaterials.some((m) => m.usageMethod === "anniversary");
+    const anniversaryPackId = filledMaterials.find((m) => m.selectedPackId)?.selectedPackId;
 
     const newCase = createCase(selectedCompany.name, selectedHall?.name ?? "", {
       caseName: caseName.trim() || undefined,
@@ -209,11 +215,19 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
                 if (!company) {
                   setSelectedHall(null);
                   setHallIdInput("");
+                  setCaseName("");
+                } else {
+                  // 案件名のデフォルト値をセット（法人名のみ）
+                  setCaseName(company.name);
                 }
               }}
               onSelectHall={(hall) => {
                 setSelectedHall(hall);
                 setHallIdInput(hall?.hallId ?? "");
+                if (hall && selectedCompany) {
+                  // 案件名のデフォルト値をセット（ホール名）
+                  setCaseName(hall.name);
+                }
               }}
             />
           </div>
