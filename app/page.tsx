@@ -47,7 +47,7 @@ export default function Home() {
   const handleSelectRecord = (caseId: string, slotId: string) => {
     setSelectedCaseId(caseId);
     setSelectedSlotId(slotId);
-    setLocalViewMode("record");
+    setLocalViewMode("detail");
     const caseItem = cases.find((c) => c.id === caseId);
     if (caseItem) {
       if (caseItem.status === "提案中" || caseItem.status === "見送り") {

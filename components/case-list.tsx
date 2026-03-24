@@ -45,6 +45,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { GanttCalendar } from "@/components/gantt-calendar";
 import {
   initialCompanies,
   initialHalls,
@@ -811,119 +812,16 @@ export function CaseList({ onSelectCase, onOpenCreateForm, onAddMaterial, onSele
         </div>
       </Card>
 
-      {/* レコードテーブル一覧 */}
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-muted/30 border-b">
-                <th className="text-left p-3 font-semibold whitespace-nowrap">案件番号</th>
-                <th className="text-left p-3 font-semibold whitespace-nowrap">ステータス</th>
-                <th className="text-left p-3 font-semibold whitespace-nowrap">レコード番号</th>
-                <th className="text-left p-3 font-semibold whitespace-nowrap">商材区分</th>
-                <th className="text-left p-3 font-semibold whitespace-nowrap">商材名</th>
-                <th className="text-left p-3 font-semibold whitespace-nowrap">法人名</th>
-                <th className="text-left p-3 font-semibold whitespace-nowrap">ホール名</th>
-                <th className="text-left p-3 font-semibold whitespace-nowrap">掲載開始日</th>
-                <th className="text-left p-3 font-semibold whitespace-nowrap">掲載終了日</th>
-                <th className="text-right p-3 font-semibold whitespace-nowrap">掲載日数</th>
-                <th className="text-left p-3 font-semibold whitespace-nowrap">バナー種別</th>
-                <th className="text-left p-3 font-semibold whitespace-nowrap">担当営業</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRecords.length === 0 && filteredCasesWithoutSlots.length === 0 ? (
-                <tr>
-                  <td colSpan={12} className="p-8 text-center text-muted-foreground">
-                    {cases.length === 0
-                      ? "案件がありません。新規案件を作成してください。"
-                      : "条件に一致するレコードがありません。"}
-                  </td>
-                </tr>
-              ) : (
-                <>
-                  {filteredRecords.map(({ caseItem, slot }) => (
-                    <tr key={`${caseItem.id}-${slot.id}`} className="border-b hover:bg-muted/10 transition-colors">
-                      <td className="p-3">
-                        <button
-                          type="button"
-                          className="text-blue-600 hover:underline font-medium"
-                          onClick={() => onSelectCase(caseItem.id)}
-                        >
-                          {caseItem.caseNumber || "-"}
-                        </button>
-                      </td>
-                      <td className="p-3">
-                        <StatusBadge status={caseItem.status} />
-                      </td>
-                      <td className="p-3">
-                        <button
-                          type="button"
-                          className="text-blue-600 hover:underline font-mono"
-                          onClick={() => onSelectRecord?.(caseItem.id, slot.id)}
-                        >
-                          {slot.recordNumber || "-"}
-                        </button>
-                      </td>
-                      <td className="p-3">
-                        {slot.materialCategory && (
-                          <Badge variant="outline" className="font-normal">
-                            {slot.materialCategory}
-                          </Badge>
-                        )}
-                      </td>
-                      <td className="p-3 whitespace-nowrap">{slot.materialName || "-"}</td>
-                      <td className="p-3 whitespace-nowrap">{caseItem.corporateName}</td>
-                      <td className="p-3 whitespace-nowrap">{caseItem.storeName}</td>
-                      <td className="p-3 whitespace-nowrap">
-                        {format(slot.startDate, "yyyy-MM-dd", { locale: ja })}
-                      </td>
-                      <td className="p-3 whitespace-nowrap">
-                        {format(slot.endDate, "yyyy-MM-dd", { locale: ja })}
-                      </td>
-                      <td className="p-3 text-right">
-                        {getDaysCount(slot.startDate, slot.endDate)}日間
-                      </td>
-                      <td className="p-3 whitespace-nowrap">{slot.bannerType}</td>
-                      <td className="p-3 whitespace-nowrap">{caseItem.salesPersonName || "山田 太郎"}</td>
-                    </tr>
-                  ))}
-                  {/* 商材のない案件 */}
-                  {filteredCasesWithoutSlots.map((caseItem) => (
-                    <tr key={caseItem.id} className="border-b hover:bg-muted/10 transition-colors">
-                      <td className="p-3">
-                        <button
-                          type="button"
-                          className="text-blue-600 hover:underline font-medium"
-                          onClick={() => onSelectCase(caseItem.id)}
-                        >
-                          {caseItem.caseNumber || "-"}
-                        </button>
-                      </td>
-                      <td className="p-3">
-                        <StatusBadge status={caseItem.status} />
-                      </td>
-                      <td className="p-3 text-muted-foreground">-</td>
-                      <td className="p-3">-</td>
-                      <td className="p-3">-</td>
-                      <td className="p-3 whitespace-nowrap">{caseItem.corporateName}</td>
-                      <td className="p-3 whitespace-nowrap">{caseItem.storeName}</td>
-                      <td className="p-3">-</td>
-                      <td className="p-3">-</td>
-                      <td className="p-3 text-right">-</td>
-                      <td className="p-3">-</td>
-                      <td className="p-3 whitespace-nowrap">{caseItem.salesPersonName || "山田 太郎"}</td>
-                    </tr>
-                  ))}
-                </>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="p-3 border-t bg-muted/10 text-sm text-muted-foreground">
-          {filteredRecords.length + filteredCasesWithoutSlots.length} 件表示
-        </div>
-      </Card>
+      {/* スケジュールカレンダー */}
+      <GanttCalendar
+        proposalSlots={filteredRecords.map(({ slot }) => slot)}
+        onSelectSlot={(slotId) => {
+          const record = filteredRecords.find(({ slot }) => slot.id === slotId);
+          if (record) {
+            onSelectRecord?.(record.caseItem.id, slotId);
+          }
+        }}
+      />
 
       {/* 保存ダイアログ */}
       <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>

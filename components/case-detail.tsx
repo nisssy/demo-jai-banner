@@ -8,12 +8,6 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -58,13 +52,12 @@ import {
   FileText,
   ClipboardList,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { SlotCalendar } from "@/components/slot-calendar";
 import { ApplicationUpload } from "@/components/application-upload";
 import { MaterialUpload } from "@/components/material-upload";
 import { CaseChat } from "@/components/case-chat";
 import { StatusBadge } from "@/components/status-badge";
-import { GanttCalendar } from "@/components/gantt-calendar";
 import { useCaseStore } from "@/lib/case-store";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
@@ -1128,13 +1121,6 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
         </div>
       </Card>
 
-      {/* ===== ガントチャートカレンダー（バナー各種選択時に表示） ===== */}
-      {caseData.proposalSlots.length > 0 && (
-        <GanttCalendar
-          proposalSlots={caseData.proposalSlots}
-          onSelectSlot={(slotId) => setActiveRecordSlotId(slotId)}
-        />
-      )}
 
       {/* ===== 商材情報セクション（詳細） ===== */}
       {materialStates.map((material, idx) => {
@@ -1411,115 +1397,9 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                     )}
                   </div>
 
-                  {/* ===== Step1/Step2 タブ + チャット ===== */}
+                  {/* ===== コンテンツ + チャット ===== */}
                   <div className="flex gap-6">
-                  <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-w-0">
-                    <TabsList className="w-full grid grid-cols-2">
-                      <TabsTrigger value="proposal">
-                        ステップ1 提案
-                      </TabsTrigger>
-                      <TabsTrigger value="publishing">
-                        ステップ2 掲載
-                      </TabsTrigger>
-                    </TabsList>
-
-                    {/* ===== ステップ1 提案 ===== */}
-                    <TabsContent value="proposal" className="space-y-6 mt-6">
-                      {isAdmin ? (
-                        <div className="flex items-center justify-center py-12">
-                          <p className="text-muted-foreground text-sm">
-                            事務側にはステップ1の内容はありません
-                          </p>
-                        </div>
-                      ) : (
-                      <>
-                      {/* 提案内容 - 掲載日時とバナー種別 */}
-                      <div className="space-y-2">
-                        <Label className="text-base font-medium">
-                          掲載日時とバナー種別
-                        </Label>
-                        <p className="text-sm text-muted-foreground">
-                          カレンダー上でドラッグしてバナー種別の選択と期間の選択ができます（複数選択可能）
-                        </p>
-                        <SlotCalendar
-                          selectedSlots={caseData.proposalSlots}
-                          onAddSlot={handleAddSlot}
-                          onRemoveSlot={handleRemoveSlot}
-                          aiRecommendedSlots={caseData.aiRecommendedSlots}
-                        />
-                      </div>
-
-                      {/* フッターボタン（提案内容を登録/キャンセル） */}
-                      <div className="flex justify-end gap-3 pt-4 border-t">
-                        <Button variant="outline" onClick={onBack}>
-                          キャンセル
-                        </Button>
-                        <Button
-                          onClick={() => handleRegisterProposal(material.id)}
-                        >
-                          提案内容を登録
-                        </Button>
-                      </div>
-
-                      {/* 実施方針 */}
-                      <Card className="p-0 border">
-                        <div className="p-6 space-y-4">
-                          <div>
-                            <h3 className="text-base font-semibold">
-                              実施方針
-                            </h3>
-                            <p className="text-sm text-muted-foreground">
-                              顧客からの回答を記録してください
-                            </p>
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor={`policy-${material.id}`}>
-                              顧客回答
-                            </Label>
-                            <Textarea
-                              id={`policy-${material.id}`}
-                              placeholder="顧客からの回答内容を入力してください..."
-                              value={material.implementationPolicy}
-                              onChange={(e) =>
-                                setMaterialStates((prev) =>
-                                  prev.map((m) =>
-                                    m.id === material.id
-                                      ? {
-                                          ...m,
-                                          implementationPolicy: e.target.value,
-                                        }
-                                      : m
-                                  )
-                                )
-                              }
-                              rows={4}
-                            />
-                          </div>
-                          <div className="flex gap-3">
-                            <Button
-                              onClick={() => setShowProceedDialog(true)}
-                              className="flex-1"
-                            >
-                              <Send className="mr-2 h-4 w-4" />
-                              配信を進める
-                            </Button>
-                            <Button
-                              variant="outline"
-                              onClick={() => setShowSkipDialog(true)}
-                              className="flex-1"
-                            >
-                              <X className="mr-2 h-4 w-4" />
-                              見送る
-                            </Button>
-                          </div>
-                        </div>
-                      </Card>
-                      </>
-                      )}
-                    </TabsContent>
-
-                    {/* ===== ステップ2 掲載 ===== */}
-                    <TabsContent value="publishing" className="space-y-6 mt-6">
+                  <div className="flex-1 min-w-0 space-y-6">
                       {isAdmin ? (
                         <>
                           {/* ===== 事務側 ===== */}
@@ -1563,23 +1443,6 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                                   />
                                 );
                               })()}
-                            </div>
-                          </Card>
-
-                          {/* 掲載内容（カレンダーUI・編集可能） */}
-                          <Card className="border">
-                            <div className="p-6 space-y-4">
-                              <div>
-                                <h3 className="text-base font-semibold">掲載内容</h3>
-                                <p className="text-sm text-muted-foreground">
-                                  掲載日程とバナー種別を編集できます
-                                </p>
-                              </div>
-                              <SlotCalendar
-                                selectedSlots={caseData.proposalSlots}
-                                onAddSlot={handleAddSlot}
-                                onRemoveSlot={handleRemoveSlot}
-                              />
                             </div>
                           </Card>
 
@@ -1727,26 +1590,6 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                             </div>
                           </Card>
 
-                          {/* 掲載内容 */}
-                          <Card className="border">
-                            <div className="p-6 space-y-4">
-                              <div>
-                                <h3 className="text-base font-semibold">
-                                  掲載内容
-                                </h3>
-                                <p className="text-sm text-muted-foreground">
-                                  掲載日程とバナー種別を編集できます
-                                </p>
-                              </div>
-
-                              <SlotCalendar
-                                selectedSlots={caseData.proposalSlots}
-                                onAddSlot={handleAddSlot}
-                                onRemoveSlot={handleRemoveSlot}
-                              />
-                            </div>
-                          </Card>
-
                           {/* 掲載素材 */}
                           <MaterialUpload
                             materials={caseData.materials || []}
@@ -1784,7 +1627,7 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                             </div>
                           </div>
 
-                          {/* 掲載停止セクション（掲載中のみ表示） */}
+                          {/* 掲載停止セクション（掲載中のみ画面下部に表示） */}
                           {isPublishing && (
                             <Card className="border-orange-200 bg-orange-50">
                               <div className="p-6 space-y-4">
@@ -1826,8 +1669,7 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                           )}
                         </>
                       )}
-                    </TabsContent>
-                  </Tabs>
+                  </div>
                   <div className="w-[320px] flex-shrink-0">
                     <CaseChat caseData={caseData} slotId={material.id} />
                   </div>
