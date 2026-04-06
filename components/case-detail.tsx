@@ -51,6 +51,7 @@ import {
   Check,
   FileText,
   ClipboardList,
+  Copy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -81,6 +82,8 @@ interface CaseDetailProps {
   onBackToList?: () => void;
   initialSlotId?: string | null;
   viewType?: "case" | "record";
+  onOpenRecord?: (slotId: string) => void;
+  onDuplicate?: (newCaseId: string) => void;
 }
 
 const circledNumbers =
@@ -97,7 +100,7 @@ interface MaterialState {
   billingAmount: string;
 }
 
-export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, viewType = "case" }: CaseDetailProps) {
+export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, viewType = "case", onOpenRecord, onDuplicate }: CaseDetailProps) {
   const {
     addProposalSlot,
     removeProposalSlot,
@@ -114,6 +117,7 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
     requestStopPublishing,
     approveCase,
     rejectCase,
+    duplicateCase,
     viewMode,
   } = useCaseStore();
 
@@ -160,7 +164,34 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectComment, setRejectComment] = useState("");
   const [showApplicationInfoModal, setShowApplicationInfoModal] = useState(false);
+  const [publishingAdditionalRows, setPublishingAdditionalRows] = useState<number[]>([]);
+  const [uploadedImages, setUploadedImages] = useState<Record<string, string>>({});
   const [activeRecordSlotId, setActiveRecordSlotId] = useState<string | null>(initialSlotId ?? null);
+
+  useEffect(() => {
+    setActiveRecordSlotId(initialSlotId ?? null);
+  }, [initialSlotId]);
+
+  // materialStatesにエントリがないスロットを動的に追加
+  useEffect(() => {
+    if (!activeRecordSlotId) return;
+    setMaterialStates((prev) => {
+      if (prev.some((m) => m.id === activeRecordSlotId)) return prev;
+      return [
+        ...prev,
+        {
+          id: activeRecordSlotId,
+          isOpen: true,
+          implementationPolicy: caseData.implementationPolicy || "",
+          category: "",
+          eventType: "",
+          usageMethod: "" as "" | "anniversary" | "single",
+          selectedPackId: "",
+          billingAmount: "",
+        },
+      ];
+    });
+  }, [activeRecordSlotId, caseData.implementationPolicy]);
 
   const initialTab =
     caseData.status === "提案中" || caseData.status === "見送り"
@@ -275,7 +306,7 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
       endDate: now,
       startTime: "10:00",
       endTime: "18:00",
-      bannerType: "バナー各種",
+      bannerType: "メインバナー",
     };
     addProposalSlot(caseData.id, newSlot);
     setMaterialStates((prev) => [
@@ -333,7 +364,7 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
       id: `slot-${Date.now()}`,
       startDate: today,
       endDate: tomorrow,
-      bannerType: "バナー各種",
+      bannerType: "メインバナー",
     };
 
     // 重複チェック
@@ -450,9 +481,8 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
 
   // ステッパーのステップ定義
   const stepperSteps = [
-    { label: "基本情報登録", done: caseData.status !== "提案中" && caseData.status !== "見送り" },
-    { label: "LINE広告アカウント登録", done: ["事務確認中", "掲載中", "掲載停止", "掲載停止依頼中"].includes(caseData.status) },
-    { label: "配信レポート作成", done: caseData.status === "掲載中" || caseData.status === "掲載停止" },
+    { label: "提案", done: caseData.status !== "提案中" && caseData.status !== "見送り" },
+    { label: "掲載", done: caseData.status === "掲載中" || caseData.status === "掲載停止" || caseData.status === "掲載停止依頼中" },
   ];
 
   // 商材詳細のアクティブステップ
@@ -536,17 +566,21 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                 >
                   <div className={cn(
                     "w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold border-2 transition-colors",
-                    step.done
-                      ? "border-green-500 text-green-600 bg-white"
-                      : i === activeStepperStep
-                        ? "border-gray-400 text-gray-500 bg-white"
+                    i === activeStepperStep
+                      ? step.done
+                        ? "border-green-500 text-green-600 bg-green-50 ring-2 ring-green-200"
+                        : "border-blue-500 text-blue-600 bg-blue-50 ring-2 ring-blue-200"
+                      : step.done
+                        ? "border-green-500 text-green-600 bg-white"
                         : "border-gray-300 text-gray-400 bg-white"
                   )}>
                     {i + 1}
                   </div>
                   <span className={cn(
                     "text-xs font-medium text-center",
-                    step.done ? "text-green-600" : i === activeStepperStep ? "text-gray-700" : "text-gray-400"
+                    i === activeStepperStep
+                      ? step.done ? "text-green-700 font-bold" : "text-blue-700 font-bold"
+                      : step.done ? "text-green-600" : "text-gray-400"
                   )}>
                     {step.label}
                   </span>
@@ -558,6 +592,10 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
             ))}
           </div>
         </div>
+
+        {/* 左メインカラム + 右チャットカラム */}
+        <div className="flex gap-6">
+        <div className="flex-1 min-w-0 space-y-6">
 
         {/* レコード基本情報 */}
         <Card className="p-6">
@@ -620,22 +658,36 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
           </div>
         </Card>
 
-        {/* ステッパーに対応したコンテンツ（カレンダー非表示） */}
+        {/* ステッパーに対応したコンテンツ */}
         {slotMaterialState && (
           <div className="space-y-6">
-            {/* ステップ1: 基本情報登録 */}
+            {/* ステップ1: 提案（実施方針確認） */}
             {activeStepperStep === 0 && (
               <Card className="p-6 space-y-6">
                 <h3 className="text-base font-semibold flex items-center gap-2">
-                  基本情報
+                  提案 - 実施方針
                   {isReviewPending && <Badge className="bg-purple-100 text-purple-800">事務確認中</Badge>}
                   {isReviewRejected && <Badge variant="destructive">差し戻し</Badge>}
                 </h3>
 
-                {/* カテゴリ・イベント区分（設定済みなら変更不可） */}
+                {/* 実施方針 */}
+                <div className="space-y-3">
+                  <Label className="text-sm font-semibold">実施方針</Label>
+                  <Textarea
+                    placeholder="この商材の実施方針を入力してください..."
+                    value={slotMaterialState.implementationPolicy || ""}
+                    onChange={(e) => updateMaterialField(slotMaterialState.id, { implementationPolicy: e.target.value })}
+                    rows={4}
+                  />
+                  <p className="text-xs text-muted-foreground">ターゲット層、配信目的、期待する効果などを記載してください</p>
+                </div>
+
+                <Separator />
+
+                {/* 商材区分・商材名（設定済みなら変更不可） */}
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium">カテゴリ</Label>
+                    <Label className="text-sm font-medium">商材区分</Label>
                     {activeSlot.materialCategory ? (
                       <Input value={activeSlot.materialCategory} readOnly className="bg-muted/30" />
                     ) : (
@@ -656,7 +708,7 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium">イベント区分</Label>
+                    <Label className="text-sm font-medium">商材名</Label>
                     {activeSlot.materialName ? (
                       <Input value={activeSlot.materialName} readOnly className="bg-muted/30" />
                     ) : (
@@ -677,6 +729,141 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                     )}
                   </div>
                 </div>
+
+                {/* 利用方法（商材名選択後に表示） */}
+                {(activeSlot.materialName || slotMaterialState.eventType) && (
+                  <>
+                    <Separator />
+                    <div className="space-y-4">
+                      <Label className="text-sm font-medium">利用方法</Label>
+                      <RadioGroup
+                        value={slotMaterialState.usageMethod}
+                        onValueChange={(val) => {
+                          const updates: Partial<MaterialState> = {
+                            usageMethod: val as "anniversary" | "single",
+                          };
+                          if (val === "anniversary" && nearestPack) {
+                            updates.selectedPackId = nearestPack.id;
+                            updates.billingAmount = "";
+                          } else if (val === "single") {
+                            updates.selectedPackId = "";
+                          }
+                          updateMaterialField(slotMaterialState.id, updates);
+                        }}
+                        className="space-y-3"
+                      >
+                        {/* 周年パックで実施 */}
+                        <div
+                          className={`flex items-start gap-3 rounded-lg border p-4 ${
+                            slotMaterialState.usageMethod === "anniversary"
+                              ? "border-blue-300 bg-blue-50/50"
+                              : "border-muted"
+                          } ${!hasPacks ? "opacity-50" : ""}`}
+                        >
+                          <RadioGroupItem
+                            value="anniversary"
+                            id={`usage-anniversary-record-${slotMaterialState.id}`}
+                            disabled={!hasPacks}
+                            className="mt-0.5"
+                          />
+                          <div className="flex-1 space-y-3">
+                            <Label
+                              htmlFor={`usage-anniversary-record-${slotMaterialState.id}`}
+                              className={`text-sm font-medium ${!hasPacks ? "cursor-not-allowed" : "cursor-pointer"}`}
+                            >
+                              周年パックで実施
+                            </Label>
+                            {!hasPacks && (
+                              <p className="text-xs text-muted-foreground">
+                                この法人は周年パックを購入していません
+                              </p>
+                            )}
+                            {slotMaterialState.usageMethod === "anniversary" && hasPacks && (
+                              <div className="space-y-2 pt-1">
+                                {corporationPacks.map((pack) => (
+                                  <label
+                                    key={pack.id}
+                                    className={`flex items-center justify-between rounded-md border p-3 cursor-pointer transition-colors ${
+                                      slotMaterialState.selectedPackId === pack.id
+                                        ? "border-blue-400 bg-blue-50"
+                                        : "border-muted hover:bg-muted/30"
+                                    }`}
+                                    onClick={() =>
+                                      updateMaterialField(slotMaterialState.id, {
+                                        selectedPackId: pack.id,
+                                      })
+                                    }
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <div
+                                        className={`h-4 w-4 rounded-full border-2 flex items-center justify-center ${
+                                          slotMaterialState.selectedPackId === pack.id
+                                            ? "border-blue-500"
+                                            : "border-muted-foreground/40"
+                                        }`}
+                                      >
+                                        {slotMaterialState.selectedPackId === pack.id && (
+                                          <div className="h-2 w-2 rounded-full bg-blue-500" />
+                                        )}
+                                      </div>
+                                      <span className="text-sm font-medium">{pack.title}</span>
+                                    </div>
+                                    <span className="text-xs text-muted-foreground">
+                                      有効期限: {format(pack.expiryDate, "yyyy/MM/dd", { locale: ja })}
+                                    </span>
+                                  </label>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 単発で実施 */}
+                        <div
+                          className={`flex items-start gap-3 rounded-lg border p-4 ${
+                            slotMaterialState.usageMethod === "single"
+                              ? "border-blue-300 bg-blue-50/50"
+                              : "border-muted"
+                          }`}
+                        >
+                          <RadioGroupItem
+                            value="single"
+                            id={`usage-single-record-${slotMaterialState.id}`}
+                            className="mt-0.5"
+                          />
+                          <div className="flex-1 space-y-3">
+                            <Label
+                              htmlFor={`usage-single-record-${slotMaterialState.id}`}
+                              className="text-sm font-medium cursor-pointer"
+                            >
+                              単発で実施
+                            </Label>
+                            {slotMaterialState.usageMethod === "single" && (
+                              <div className="space-y-2 pt-1">
+                                <Label className="text-xs text-muted-foreground">請求額</Label>
+                                <div className="relative max-w-xs">
+                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">¥</span>
+                                  <Input
+                                    type="text"
+                                    inputMode="numeric"
+                                    placeholder="0"
+                                    className="pl-7"
+                                    value={slotMaterialState.billingAmount}
+                                    onChange={(e) => {
+                                      const val = e.target.value.replace(/[^0-9]/g, "");
+                                      updateMaterialField(slotMaterialState.id, { billingAmount: val });
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </RadioGroup>
+                    </div>
+                    <Separator />
+                  </>
+                )}
 
                 {/* 申込書 */}
                 {(() => {
@@ -702,22 +889,43 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                   );
                 })()}
 
-                {/* 掲載素材（kintone風テーブル） */}
+                <div className="flex justify-between pt-4 border-t">
+                  <Button variant="outline" onClick={onBack}>キャンセル</Button>
+                  <div className="flex gap-3">
+                    {!isReviewPending && !isPublishing && (
+                      <Button onClick={handleRequestReview}>
+                        <Send className="mr-2 h-4 w-4" />
+                        事務へ確認依頼
+                      </Button>
+                    )}
+                    <Button onClick={() => setActiveStepperStep(1)}>
+                      次へ（掲載へ）
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {/* ステップ2: 掲載 */}
+            {activeStepperStep === 1 && (
+              <Card className="p-6 space-y-6">
+                <h3 className="text-base font-semibold">掲載</h3>
+
+                {/* 掲載素材（kintone風テーブル - 時刻削除、行追加・画像アップロード対応） */}
                 <div className="space-y-3">
                   <h4 className="text-sm font-semibold">掲載素材</h4>
                   <div className="border rounded-lg overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-[#5b9bd5] text-white">
-                          <th className="p-2 text-left font-medium text-xs whitespace-nowrap border-r border-blue-400">掲載開始日_T</th>
-                          <th className="p-2 text-left font-medium text-xs whitespace-nowrap border-r border-blue-400">掲載開始時刻</th>
-                          <th className="p-2 text-left font-medium text-xs whitespace-nowrap border-r border-blue-400">掲載終了日_T</th>
-                          <th className="p-2 text-left font-medium text-xs whitespace-nowrap border-r border-blue-400">掲載終了時刻</th>
+                          <th className="p-2 text-left font-medium text-xs whitespace-nowrap border-r border-blue-400">掲載開始日</th>
+                          <th className="p-2 text-left font-medium text-xs whitespace-nowrap border-r border-blue-400">掲載終了日</th>
                           <th className="p-2 text-left font-medium text-xs whitespace-nowrap border-r border-blue-400">画像素材</th>
                           <th className="p-2 text-left font-medium text-xs whitespace-nowrap border-r border-blue-400">備考</th>
                           <th className="p-2 text-center font-medium text-xs whitespace-nowrap border-r border-blue-400">素材未着</th>
                           <th className="p-2 text-center font-medium text-xs whitespace-nowrap border-r border-blue-400">掲載処理</th>
-                          <th className="p-2 text-center font-medium text-xs whitespace-nowrap">最終チェック</th>
+                          <th className="p-2 text-center font-medium text-xs whitespace-nowrap border-r border-blue-400">最終チェック</th>
+                          <th className="p-2 text-center font-medium text-xs whitespace-nowrap">操作</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -739,14 +947,6 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                               </td>
                               <td className="p-2 border-r">
                                 <Input
-                                  type="time"
-                                  defaultValue={slot.startTime || "00:00"}
-                                  className="h-8 text-xs w-[90px]"
-                                  onChange={(e) => handleUpdateSlot(slot.id, { startTime: e.target.value })}
-                                />
-                              </td>
-                              <td className="p-2 border-r">
-                                <Input
                                   type="date"
                                   defaultValue={format(slot.endDate, "yyyy-MM-dd")}
                                   className="h-8 text-xs w-[130px]"
@@ -758,17 +958,41 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                                 />
                               </td>
                               <td className="p-2 border-r">
-                                <Input
-                                  type="time"
-                                  defaultValue={slot.endTime || "23:59"}
-                                  className="h-8 text-xs w-[90px]"
-                                  onChange={(e) => handleUpdateSlot(slot.id, { endTime: e.target.value })}
-                                />
-                              </td>
-                              <td className="p-2 border-r">
-                                <div className="flex items-center gap-1">
-                                  <span className="text-blue-600 text-xs hover:underline cursor-pointer">参照</span>
-                                  <span className="text-xs text-muted-foreground">(最大1 GB)</span>
+                                <div className="space-y-1">
+                                  {uploadedImages[`${slot.id}-${rowIdx}`] ? (
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs text-green-600">✓ アップロード済み</span>
+                                      <button
+                                        type="button"
+                                        className="text-red-500 text-xs hover:underline"
+                                        onClick={() => {
+                                          const newImages = { ...uploadedImages };
+                                          delete newImages[`${slot.id}-${rowIdx}`];
+                                          setUploadedImages(newImages);
+                                        }}
+                                      >
+                                        削除
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <label className="cursor-pointer">
+                                      <span className="text-blue-600 text-xs hover:underline">画像をアップロード</span>
+                                      <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={(e) => {
+                                          const file = e.target.files?.[0];
+                                          if (file) {
+                                            setUploadedImages(prev => ({
+                                              ...prev,
+                                              [`${slot.id}-${rowIdx}`]: file.name,
+                                            }));
+                                          }
+                                        }}
+                                      />
+                                    </label>
+                                  )}
                                 </div>
                               </td>
                               <td className="p-2 border-r">
@@ -786,51 +1010,279 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                                   <span className="text-xs text-muted-foreground">完了</span>
                                 </div>
                               </td>
-                              <td className="p-2 text-center">
+                              <td className="p-2 border-r text-center">
                                 <div className="flex items-center justify-center gap-1">
                                   <input type="checkbox" className="h-3.5 w-3.5" />
                                   <span className="text-xs text-muted-foreground">完了</span>
                                 </div>
                               </td>
+                              <td className="p-2 text-center">
+                                <span className="text-xs text-muted-foreground">-</span>
+                              </td>
                             </tr>
                           ))}
-                        {/* 追加行（空行） */}
-                        <tr className="border-t hover:bg-muted/5">
-                          <td className="p-2 border-r"><Input type="date" className="h-8 text-xs w-[130px]" /></td>
-                          <td className="p-2 border-r"><Input type="time" defaultValue="00:00" className="h-8 text-xs w-[90px]" /></td>
-                          <td className="p-2 border-r"><Input type="date" className="h-8 text-xs w-[130px]" /></td>
-                          <td className="p-2 border-r"><Input type="time" defaultValue="23:59" className="h-8 text-xs w-[90px]" /></td>
-                          <td className="p-2 border-r">
-                            <div className="flex items-center gap-1">
-                              <span className="text-blue-600 text-xs hover:underline cursor-pointer">参照</span>
-                              <span className="text-xs text-muted-foreground">(最大1 GB)</span>
-                            </div>
-                          </td>
-                          <td className="p-2 border-r"><Input className="h-8 text-xs w-[120px]" placeholder="" /></td>
-                          <td className="p-2 border-r text-center">
-                            <div className="flex items-center justify-center gap-1">
-                              <input type="checkbox" className="h-3.5 w-3.5" />
-                              <span className="text-xs text-muted-foreground">未着</span>
-                            </div>
-                          </td>
-                          <td className="p-2 border-r text-center">
-                            <div className="flex items-center justify-center gap-1">
-                              <input type="checkbox" className="h-3.5 w-3.5" />
-                              <span className="text-xs text-muted-foreground">完了</span>
-                            </div>
-                          </td>
-                          <td className="p-2 text-center">
-                            <div className="flex items-center justify-center gap-1">
-                              <input type="checkbox" className="h-3.5 w-3.5" />
-                              <span className="text-xs text-muted-foreground">完了</span>
-                            </div>
-                          </td>
-                        </tr>
+                        {/* 追加行 */}
+                        {publishingAdditionalRows.map((rowId, addIdx) => (
+                          <tr key={`add-${rowId}`} className="border-t hover:bg-muted/5">
+                            <td className="p-2 border-r"><Input type="date" className="h-8 text-xs w-[130px]" /></td>
+                            <td className="p-2 border-r"><Input type="date" className="h-8 text-xs w-[130px]" /></td>
+                            <td className="p-2 border-r">
+                              <div className="space-y-1">
+                                {uploadedImages[`add-${rowId}`] ? (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-green-600">✓ アップロード済み</span>
+                                    <button
+                                      type="button"
+                                      className="text-red-500 text-xs hover:underline"
+                                      onClick={() => {
+                                        const newImages = { ...uploadedImages };
+                                        delete newImages[`add-${rowId}`];
+                                        setUploadedImages(newImages);
+                                      }}
+                                    >
+                                      削除
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <label className="cursor-pointer">
+                                    <span className="text-blue-600 text-xs hover:underline">画像をアップロード</span>
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      className="hidden"
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) {
+                                          setUploadedImages(prev => ({
+                                            ...prev,
+                                            [`add-${rowId}`]: file.name,
+                                          }));
+                                        }
+                                      }}
+                                    />
+                                  </label>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-2 border-r"><Input className="h-8 text-xs w-[120px]" placeholder="" /></td>
+                            <td className="p-2 border-r text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <input type="checkbox" className="h-3.5 w-3.5" />
+                                <span className="text-xs text-muted-foreground">未着</span>
+                              </div>
+                            </td>
+                            <td className="p-2 border-r text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <input type="checkbox" className="h-3.5 w-3.5" />
+                                <span className="text-xs text-muted-foreground">完了</span>
+                              </div>
+                            </td>
+                            <td className="p-2 border-r text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <input type="checkbox" className="h-3.5 w-3.5" />
+                                <span className="text-xs text-muted-foreground">完了</span>
+                              </div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <button
+                                type="button"
+                                className="text-red-500 text-xs hover:underline"
+                                onClick={() => setPublishingAdditionalRows(prev => prev.filter(id => id !== rowId))}
+                              >
+                                削除
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPublishingAdditionalRows(prev => [...prev, Date.now()])}
+                    className="gap-1"
+                  >
+                    <Plus className="h-3 w-3" />
+                    行を追加
+                  </Button>
                 </div>
 
+                <div className="flex justify-between pt-4 border-t">
+                  <Button variant="outline" onClick={() => setActiveStepperStep(0)}>戻る</Button>
+                  <div className="flex gap-3">
+                    {!isReviewPending && !isPublishing && (
+                      <Button onClick={handleRequestReview}>
+                        <Send className="mr-2 h-4 w-4" />
+                        事務へ確認依頼
+                      </Button>
+                    )}
+                    <Button variant="outline" onClick={onBack}>完了</Button>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+          </div>
+        )}
+
+        {/* 営業/事務 別コンテンツ */}
+        {slotMaterialState && (
+          <div className="space-y-6">
+            {isAdmin ? (
+              <>
+                {/* 事務側: 基本情報（読み取り専用） */}
+                <Card className="border">
+                  <div className="p-6 space-y-6">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-base font-semibold flex items-center gap-2">
+                        基本情報
+                        <Badge className="bg-purple-100 text-purple-800">
+                          {caseData.status === "事務確認中"
+                            ? "確認待ち"
+                            : isReviewApproved
+                              ? "承認済み"
+                              : isReviewRejected
+                                ? "差し戻し済み"
+                                : caseData.status}
+                        </Badge>
+                      </h3>
+                    </div>
+                    {(() => {
+                      const isAnniversary = slotMaterialState.usageMethod === "anniversary";
+                      const selectedPack = isAnniversary
+                        ? corporationPacks.find((p) => p.id === slotMaterialState.selectedPackId)
+                        : null;
+                      return (
+                        <ApplicationUpload
+                          documentUrl={caseData.applicationDocumentUrl}
+                          onUpload={() => {}}
+                          onRemove={() => {}}
+                          readOnly={true}
+                          alwaysShowData={true}
+                          isAnniversaryPack={isAnniversary}
+                          anniversaryPackTitle={selectedPack?.title}
+                          anniversaryPackExpiry={
+                            selectedPack
+                              ? format(selectedPack.expiryDate, "yyyy/MM/dd", { locale: ja })
+                              : undefined
+                          }
+                        />
+                      );
+                    })()}
+                  </div>
+                </Card>
+
+                {/* 事務側: 掲載素材（読み取り専用） */}
+                <MaterialUpload
+                  materials={caseData.materials || []}
+                  proposalSlots={caseData.proposalSlots}
+                  onAddMaterial={() => {}}
+                  onRemoveMaterial={() => {}}
+                  readOnly={true}
+                />
+
+                {/* 承認・差し戻しボタン */}
+                {isReviewPending && (
+                  <div className="flex justify-between pt-4 border-t">
+                    <Button variant="outline" onClick={onBack}>戻る</Button>
+                    <div className="flex gap-3">
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowRejectDialog(true)}
+                        className="border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700"
+                      >
+                        <AlertCircle className="mr-2 h-4 w-4" />
+                        差し戻し
+                      </Button>
+                      <Button
+                        onClick={handleApprove}
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        <Check className="mr-2 h-4 w-4" />
+                        承認して掲載を開始
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {!isReviewPending && (
+                  <div className="flex justify-between pt-4 border-t">
+                    <Button variant="outline" onClick={onBack}>戻る</Button>
+                    {isReviewApproved && (
+                      <Badge className="bg-green-100 text-green-800 text-sm px-4 py-2">
+                        <Check className="mr-1.5 h-4 w-4" />
+                        承認済み
+                      </Badge>
+                    )}
+                    {isReviewRejected && (
+                      <Badge variant="destructive" className="text-sm px-4 py-2">
+                        <AlertCircle className="mr-1.5 h-4 w-4" />
+                        差し戻し済み
+                      </Badge>
+                    )}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {/* 営業側: 差し戻し通知 */}
+                {isReviewRejected && caseData.adminReviewComment && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle className="flex items-center gap-2">不備内容</AlertTitle>
+                    <AlertDescription className="mt-2">{caseData.adminReviewComment}</AlertDescription>
+                  </Alert>
+                )}
+
+                {/* 営業側: 基本情報（申込書） */}
+                <Card className="border">
+                  <div className="p-6 space-y-6">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-base font-semibold flex items-center gap-2">
+                        基本情報
+                        {isReviewPending && <Badge className="bg-purple-100 text-purple-800">事務確認中</Badge>}
+                        {isReviewRejected && <Badge variant="destructive">差し戻し</Badge>}
+                      </h3>
+                    </div>
+                    {(() => {
+                      const isAnniversary = slotMaterialState.usageMethod === "anniversary";
+                      const selectedPack = isAnniversary
+                        ? corporationPacks.find((p) => p.id === slotMaterialState.selectedPackId)
+                        : null;
+                      return (
+                        <ApplicationUpload
+                          documentUrl={caseData.applicationDocumentUrl}
+                          onUpload={handleUploadApplication}
+                          onRemove={handleRemoveApplication}
+                          readOnly={isReviewPending}
+                          alwaysShowData={true}
+                          isAnniversaryPack={isAnniversary}
+                          anniversaryPackTitle={selectedPack?.title}
+                          anniversaryPackExpiry={
+                            selectedPack
+                              ? format(selectedPack.expiryDate, "yyyy/MM/dd", { locale: ja })
+                              : undefined
+                          }
+                        />
+                      );
+                    })()}
+                  </div>
+                </Card>
+
+                {/* 営業側: 掲載素材 */}
+                <MaterialUpload
+                  materials={caseData.materials || []}
+                  proposalSlots={caseData.proposalSlots}
+                  onAddMaterial={handleAddMaterialFile}
+                  onRemoveMaterial={handleRemoveMaterialFile}
+                  onAddSlot={handleAddSlotFromMaterial}
+                  onUpdateSlot={handleUpdateSlot}
+                  onRemoveSlot={handleRemoveSlot}
+                  readOnly={isReviewPending}
+                  deadlineText="最終期限は1営業日前の15時必着。動画の期限は6営業日前"
+                />
+
+                {/* 営業側: アクションボタン */}
                 <div className="flex justify-between pt-4 border-t">
                   <Button variant="outline" onClick={onBack}>キャンセル</Button>
                   <div className="flex gap-3">
@@ -840,55 +1292,92 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                         事務へ確認依頼
                       </Button>
                     )}
-                    <Button onClick={() => setActiveStepperStep(1)}>
-                      次へ
-                    </Button>
+                    {isReviewApproved && !isPublishing && (
+                      <Button
+                        onClick={handleStartPublishing}
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        <Play className="mr-2 h-4 w-4" />
+                        掲載を開始
+                      </Button>
+                    )}
                   </div>
                 </div>
-              </Card>
+              </>
             )}
-
-            {/* ステップ2: LINE広告アカウント登録 */}
-            {activeStepperStep === 1 && (
-              <Card className="p-6 space-y-6">
-                <h3 className="text-base font-semibold">LINE広告アカウント登録</h3>
-                <p className="text-sm text-muted-foreground">LINE広告アカウントの設定を行います</p>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label className="text-sm">LINE広告アカウントID</Label>
-                    <Input placeholder="アカウントIDを入力..." />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm">キャンペーン名</Label>
-                    <Input placeholder="キャンペーン名を入力..." />
-                  </div>
-                </div>
-                <div className="flex justify-between pt-4 border-t">
-                  <Button variant="outline" onClick={() => setActiveStepperStep(0)}>戻る</Button>
-                  <Button onClick={() => setActiveStepperStep(2)}>次へ</Button>
-                </div>
-              </Card>
-            )}
-
-            {/* ステップ3: 配信レポート作成 */}
-            {activeStepperStep === 2 && (
-              <Card className="p-6 space-y-6">
-                <h3 className="text-base font-semibold">配信レポート作成</h3>
-                <p className="text-sm text-muted-foreground">配信結果のレポートを作成します</p>
-                <div className="p-8 text-center text-muted-foreground border rounded-lg bg-muted/10">
-                  配信完了後にレポートが生成されます
-                </div>
-                <div className="flex justify-between pt-4 border-t">
-                  <Button variant="outline" onClick={() => setActiveStepperStep(1)}>戻る</Button>
-                  <Button variant="outline" onClick={onBack}>完了</Button>
-                </div>
-              </Card>
-            )}
-
-            {/* チャット */}
-            <CaseChat caseData={caseData} slotId={activeSlot.id} />
           </div>
         )}
+
+        {/* 掲載停止依頼セクション（営業側・掲載中） */}
+        {isPublishing && !isAdmin && (
+          <Card className="border-orange-200 bg-orange-50">
+            <div className="p-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-orange-800">掲載停止</h3>
+                <p className="text-xs text-orange-600">掲載を停止する場合は事務へ依頼してください</p>
+              </div>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  setStopReason("");
+                  setShowStopDialog(true);
+                }}
+              >
+                <StopCircle className="mr-2 h-4 w-4" />
+                掲載停止を依頼
+              </Button>
+            </div>
+          </Card>
+        )}
+        {/* 掲載停止依頼中の表示（営業側） */}
+        {caseData.status === "掲載停止依頼中" && !isAdmin && (
+          <Card className="border-orange-200 bg-orange-50">
+            <div className="p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <StopCircle className="h-4 w-4 text-orange-600" />
+                <h3 className="text-sm font-semibold text-orange-800">掲載停止依頼中</h3>
+              </div>
+              <p className="text-xs text-orange-600">事務の承認を待っています。承認され次第、掲載が停止されます。</p>
+              {caseData.stopPublishingRequest && (
+                <div className="rounded-lg border border-orange-200 bg-white p-3">
+                  <p className="text-xs text-muted-foreground whitespace-pre-wrap">{caseData.stopPublishingRequest}</p>
+                </div>
+              )}
+            </div>
+          </Card>
+        )}
+        {/* 掲載停止依頼（事務側） */}
+        {caseData.status === "掲載停止依頼中" && isAdmin && caseData.stopPublishingRequest && (
+          <Card className="border-orange-200 bg-orange-50">
+            <div className="p-6 space-y-4">
+              <div>
+                <h3 className="text-base font-semibold text-orange-800">掲載停止依頼</h3>
+                <p className="text-sm text-orange-700">営業から掲載停止の依頼が届いています</p>
+              </div>
+              <div className="rounded-lg border border-orange-200 bg-white p-4">
+                <h4 className="text-sm font-medium mb-2">営業からの依頼内容</h4>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{caseData.stopPublishingRequest}</p>
+              </div>
+              <Button
+                variant="destructive"
+                onClick={() => setShowStopDialog(true)}
+              >
+                <StopCircle className="mr-2 h-4 w-4" />
+                掲載を停止する
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        </div>
+        {/* 右チャットカラム（固定表示） */}
+        <div className="w-[320px] flex-shrink-0">
+          <div className="sticky top-[180px]">
+            <CaseChat caseData={caseData} slotId={activeSlot.id} />
+          </div>
+        </div>
+        </div>
 
         {/* 申し込み情報モーダル */}
         <Dialog open={showApplicationInfoModal} onOpenChange={setShowApplicationInfoModal}>
@@ -995,66 +1484,51 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
         </Alert>
       )}
 
-      {/* ===== 基本情報カード ===== */}
+      {/* ===== 案件詳細2カラムレイアウト（添付1準拠） ===== */}
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)] gap-6">
+
+      {/* 左カラム: 案件情報 */}
       <Card className="p-6">
-        <h2 className="text-lg font-bold mb-6">基本情報</h2>
-        <div className="space-y-5">
-          {/* 法人名・ホール名（コンボボックス） */}
-          <div className="space-y-2">
-            <Label className="text-sm">法人名・ホール名</Label>
-            <CompanyHallCombobox
-              selectedCompany={selectedCompany}
-              selectedHall={selectedHall}
-              onSelectCompany={setSelectedCompany}
-              onSelectHall={setSelectedHall}
-            />
-          </div>
-
-          {/* 法人ID / ホールID */}
-          <div className="grid grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label className="text-sm">法人ID</Label>
-              <Input value={corpId} readOnly className="bg-muted/30" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm">ホールID</Label>
-              <Input value={hallId} readOnly className="bg-muted/30" />
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold">案件情報</h2>
+          <Button variant="outline" size="sm" className="gap-1" onClick={() => onBack?.()}>
+            <FileText className="h-3.5 w-3.5" />
+            編集
+          </Button>
+        </div>
+        <div className="space-y-4 text-sm">
+          <div className="flex items-start gap-3">
+            <span className="text-muted-foreground shrink-0 mt-0.5">🏢</span>
+            <div>
+              <p className="text-xs text-muted-foreground">法人</p>
+              <p className="font-medium">{caseData.corporateName}</p>
             </div>
           </div>
-
-          <div className="space-y-2">
-            <Label className="text-sm">案件名</Label>
-            <Input
-              value={caseName}
-              onChange={(e) => setCaseName(e.target.value)}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label className="text-sm">ホール担当営業</Label>
-              <Input
-                placeholder="ホールを選択すると自動入力されます"
-                value={hallSalesPerson || staffName}
-                readOnly={!!hallSalesPerson}
-                className={hallSalesPerson ? "bg-muted/30" : ""}
-                onChange={(e) => {
-                  if (!hallSalesPerson) setStaffName(e.target.value);
-                }}
-              />
+          <div className="flex items-start gap-3">
+            <span className="text-muted-foreground shrink-0 mt-0.5">📍</span>
+            <div>
+              <p className="text-xs text-muted-foreground">ホール</p>
+              <p className="font-medium">{caseData.storeName}</p>
             </div>
-            <div className="space-y-2">
-              <Label className="text-sm">依頼日</Label>
-              <Input
-                type="date"
-                value={requestDate}
-                onChange={(e) => setRequestDate(e.target.value)}
-              />
+          </div>
+          <div className="flex items-start gap-3">
+            <span className="text-muted-foreground shrink-0 mt-0.5">👤</span>
+            <div>
+              <p className="text-xs text-muted-foreground">担当営業</p>
+              <p className="font-medium">{caseData.salesPersonName || "山田 太郎"}</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <span className="text-muted-foreground shrink-0 mt-0.5">📅</span>
+            <div>
+              <p className="text-xs text-muted-foreground">依頼日</p>
+              <p className="font-medium">{format(caseData.createdAt, "yyyy-MM-dd", { locale: ja })}</p>
             </div>
           </div>
         </div>
       </Card>
 
-      {/* ===== 商材一覧テーブル ===== */}
+      {/* 右カラム: 商材一覧 */}
       <Card className="overflow-hidden">
         <div className="p-6 pb-3">
           <div className="flex items-center justify-between">
@@ -1064,55 +1538,68 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                 {caseData.proposalSlots.length}件
               </Badge>
             </h2>
-            <Button
-              variant="default"
-              size="sm"
-              onClick={handleAddMaterial}
-              className="gap-1"
-            >
-              <Plus className="h-4 w-4" />
-              商材を追加
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const allSlotIds = caseData.proposalSlots.map((s) => s.id);
+                  const newCase = duplicateCase(caseData.id, allSlotIds);
+                  if (newCase && onDuplicate) {
+                    onDuplicate(newCase.id);
+                  }
+                }}
+                className="gap-1"
+              >
+                <Copy className="h-4 w-4" />
+                複製
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleAddMaterial}
+                className="gap-1"
+              >
+                <Plus className="h-4 w-4" />
+                商材を追加
+              </Button>
+            </div>
           </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-muted/30 border-y">
-                <th className="text-left p-3 font-semibold">レコード番号</th>
-                <th className="text-left p-3 font-semibold">商材区分</th>
-                <th className="text-left p-3 font-semibold">商材名</th>
-                <th className="text-left p-3 font-semibold">バナー種別</th>
-                <th className="text-left p-3 font-semibold">掲載開始日</th>
-                <th className="text-left p-3 font-semibold">掲載終了日</th>
-                <th className="text-left p-3 font-semibold">エリア</th>
-                <th className="text-left p-3 font-semibold">ステータス</th>
+                <th className="text-left p-3 font-semibold text-xs">ステータス</th>
+                <th className="text-left p-3 font-semibold text-xs">レコード番号</th>
+                <th className="text-left p-3 font-semibold text-xs">商材名</th>
+                <th className="text-left p-3 font-semibold text-xs">店舗名</th>
+                <th className="text-left p-3 font-semibold text-xs">掲載開始日</th>
+                <th className="text-left p-3 font-semibold text-xs">掲載終了日</th>
+                <th className="text-right p-3 font-semibold text-xs">実NET額</th>
               </tr>
             </thead>
             <tbody>
               {caseData.proposalSlots.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-6 text-center text-muted-foreground">
+                  <td colSpan={7} className="p-6 text-center text-muted-foreground">
                     商材が登録されていません
                   </td>
                 </tr>
               ) : (
                 caseData.proposalSlots.map((slot) => (
-                  <tr key={slot.id} className="border-b hover:bg-muted/10 transition-colors cursor-pointer" onClick={() => setActiveRecordSlotId(slot.id)}>
+                  <tr key={slot.id} className="border-b hover:bg-muted/10 transition-colors cursor-pointer" onClick={() => onOpenRecord ? onOpenRecord(slot.id) : setActiveRecordSlotId(slot.id)}>
                     <td className="p-3">
-                      <span className="text-blue-600 hover:underline font-mono">{slot.recordNumber || "-"}</span>
+                      <StatusBadge status={caseData.status} />
                     </td>
                     <td className="p-3">
-                      {slot.materialCategory && (
-                        <Badge variant="outline" className="font-normal">{slot.materialCategory}</Badge>
-                      )}
+                      <span className="text-blue-600 hover:underline font-mono font-medium">{slot.recordNumber || "-"}</span>
                     </td>
-                    <td className="p-3">{slot.materialName || "-"}</td>
-                    <td className="p-3">{slot.bannerType}</td>
-                    <td className="p-3">{format(slot.startDate, "yyyy/MM/dd", { locale: ja })}</td>
-                    <td className="p-3">{format(slot.endDate, "yyyy/MM/dd", { locale: ja })}</td>
-                    <td className="p-3">{slot.areaName || "-"}</td>
-                    <td className="p-3"><StatusBadge status={caseData.status} /></td>
+                    <td className="p-3 text-xs">{slot.materialName || "-"}</td>
+                    <td className="p-3 text-xs">{caseData.storeName?.substring(0, 10) || "-"}</td>
+                    <td className="p-3 text-xs">{format(slot.startDate, "yyyy-MM-dd", { locale: ja })}</td>
+                    <td className="p-3 text-xs">{format(slot.endDate, "yyyy-MM-dd", { locale: ja })}</td>
+                    <td className="p-3 text-xs text-right">¥{(caseData.billingAmount || 50000).toLocaleString()}</td>
                   </tr>
                 ))
               )}
@@ -1121,9 +1608,17 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
         </div>
       </Card>
 
+      </div>
 
-      {/* ===== 商材情報セクション（詳細） ===== */}
-      {materialStates.map((material, idx) => {
+
+      {/* ===== 商材数サマリ ===== */}
+      <Card className="p-6">
+        <h3 className="text-sm text-muted-foreground mb-1">商材数</h3>
+        <p className="text-3xl font-bold">{caseData.proposalSlots.length}</p>
+      </Card>
+
+      {/* ===== (以下は旧商材情報セクション - 非表示) ===== */}
+      {false && materialStates.map((material, idx) => {
         const thisSlot = caseData.proposalSlots.find(
           (s) => s.id === material.id
         );
@@ -1153,12 +1648,12 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
 
               <CollapsibleContent>
                 <div className="px-6 pb-6 space-y-6">
-                  {/* ===== カテゴリ・イベント区分・利用方法 ===== */}
+                  {/* ===== 商材区分・商材名・利用方法 ===== */}
                   <div className="space-y-5">
                     <div className="grid grid-cols-2 gap-6">
                       <div className="space-y-2">
-                        <Label className="text-sm font-medium">カテゴリ</Label>
-                        {/* カテゴリ設定済みの場合は変更不可 */}
+                        <Label className="text-sm font-medium">商材区分</Label>
+                        {/* 商材区分設定済みの場合は変更不可 */}
                         {thisSlot?.materialCategory ? (
                           <Input value={thisSlot.materialCategory} readOnly className="bg-muted/30" />
                         ) : (
@@ -1172,7 +1667,7 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                                 selectedPackId: "",
                                 billingAmount: "",
                               });
-                              // カテゴリをスロットに保存して変更不可にする
+                              // 商材区分をスロットに保存して変更不可にする
                               const catMap: Record<string, string> = { event: "イベント", option: "オプション", point: "ポイント" };
                               updateProposalSlot(caseData.id, material.id, {
                                 materialCategory: (catMap[val] || val) as import("@/lib/types").MaterialCategory,
@@ -1192,9 +1687,9 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                       </div>
                       <div className="space-y-2">
                         <Label className="text-sm font-medium">
-                          イベント区分
+                          商材名
                         </Label>
-                        {/* イベント区分設定済みの場合は変更不可 */}
+                        {/* 商材名設定済みの場合は変更不可 */}
                         {thisSlot?.materialName ? (
                           <Input value={thisSlot.materialName} readOnly className="bg-muted/30" />
                         ) : (
@@ -1212,7 +1707,7 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                                 selectedPackId: defaultPack,
                                 billingAmount: "",
                               });
-                              // イベント区分をスロットに保存して変更不可にする
+                              // 商材名をスロットに保存して変更不可にする
                               updateProposalSlot(caseData.id, material.id, {
                                 bannerType: val as import("@/lib/types").BannerType,
                                 materialName: val,
@@ -1232,7 +1727,7 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                       </div>
                     </div>
 
-                    {/* 利用方法（イベント区分選択後に表示） */}
+                    {/* 利用方法（商材名選択後に表示） */}
                     {material.eventType && (
                       <>
                         <Separator />
@@ -1397,9 +1892,8 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                     )}
                   </div>
 
-                  {/* ===== コンテンツ + チャット ===== */}
-                  <div className="flex gap-6">
-                  <div className="flex-1 min-w-0 space-y-6">
+                  {/* ===== コンテンツ ===== */}
+                  <div className="space-y-6">
                       {isAdmin ? (
                         <>
                           {/* ===== 事務側 ===== */}
@@ -1627,52 +2121,47 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                             </div>
                           </div>
 
-                          {/* 掲載停止セクション（掲載中のみ画面下部に表示） */}
-                          {isPublishing && (
+                          {/* 掲載停止依頼セクション（営業側） */}
+                          {isPublishing && !isAdmin && (
                             <Card className="border-orange-200 bg-orange-50">
-                              <div className="p-6 space-y-4">
+                              <div className="p-4 flex items-center justify-between">
                                 <div>
-                                  <h3 className="text-base font-semibold text-orange-800">
-                                    掲載停止
-                                  </h3>
-                                  <p className="text-sm text-orange-700">
-                                    事務へ掲載停止を依頼します。依頼後、管理画面の設定が削除されカレンダーの枠が解放されます。
-                                  </p>
+                                  <h3 className="text-sm font-semibold text-orange-800">掲載停止</h3>
+                                  <p className="text-xs text-orange-600">掲載を停止する場合は事務へ依頼してください</p>
                                 </div>
-
-                                <div className="space-y-2">
-                                  <Label className="text-sm font-medium text-orange-800">
-                                    事務への掲載停止依頼文（自動生成）
-                                  </Label>
-                                  <Textarea
-                                    value={stopReason || generateStopRequestText()}
-                                    onChange={(e) => setStopReason(e.target.value)}
-                                    rows={8}
-                                    className="bg-white border-orange-200 text-sm"
-                                  />
-                                </div>
-
                                 <Button
                                   variant="destructive"
+                                  size="sm"
                                   onClick={() => {
-                                    if (!stopReason) {
-                                      setStopReason(generateStopRequestText());
-                                    }
+                                    setStopReason("");
                                     setShowStopDialog(true);
                                   }}
                                 >
                                   <StopCircle className="mr-2 h-4 w-4" />
-                                  事務へ掲載停止を依頼
+                                  掲載停止を依頼
                                 </Button>
+                              </div>
+                            </Card>
+                          )}
+                          {/* 掲載停止依頼中の表示（営業側） */}
+                          {caseData.status === "掲載停止依頼中" && !isAdmin && (
+                            <Card className="border-orange-200 bg-orange-50">
+                              <div className="p-4 space-y-3">
+                                <div className="flex items-center gap-2">
+                                  <StopCircle className="h-4 w-4 text-orange-600" />
+                                  <h3 className="text-sm font-semibold text-orange-800">掲載停止依頼中</h3>
+                                </div>
+                                <p className="text-xs text-orange-600">事務の承認を待っています。承認され次第、掲載が停止されます。</p>
+                                {caseData.stopPublishingRequest && (
+                                  <div className="rounded-lg border border-orange-200 bg-white p-3">
+                                    <p className="text-xs text-muted-foreground whitespace-pre-wrap">{caseData.stopPublishingRequest}</p>
+                                  </div>
+                                )}
                               </div>
                             </Card>
                           )}
                         </>
                       )}
-                  </div>
-                  <div className="w-[320px] flex-shrink-0">
-                    <CaseChat caseData={caseData} slotId={material.id} />
-                  </div>
                   </div>
                 </div>
               </CollapsibleContent>
@@ -1680,27 +2169,6 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
           </Card>
         );
       })}
-
-      {/* 商材がない場合のメッセージ */}
-      {materialStates.length === 0 && (
-        <Card className="p-8 text-center">
-          <p className="text-muted-foreground text-sm">
-            商材が登録されていません。「商材を追加」ボタンから商材を追加してください。
-          </p>
-        </Card>
-      )}
-
-      {/* 商材追加ボタン */}
-      <div className="flex justify-center pb-8">
-        <Button
-          variant="outline"
-          onClick={handleAddMaterial}
-          className="gap-2 border-blue-300 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-        >
-          <Plus className="h-4 w-4" />
-          商材を追加
-        </Button>
-      </div>
 
       {/* ===== 確認ダイアログ群 ===== */}
 
@@ -1767,41 +2235,21 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
           ) : (
             <>
               <DialogHeader>
-                <DialogTitle>本当に掲載停止してよろしいですか？</DialogTitle>
+                <DialogTitle>掲載停止を依頼</DialogTitle>
                 <DialogDescription>
-                  以下の内容が実行されます。この操作は取り消せません。
+                  停止理由を入力して事務へ掲載停止を依頼してください。事務が承認すると掲載が停止されます。
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
-                <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-start gap-2">
-                      <StopCircle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
-                      <span>管理画面の掲載設定を<span className="font-semibold text-red-600">削除</span>します</span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <Calendar className="h-4 w-4 text-orange-500 mt-0.5 flex-shrink-0" />
-                      <span>カレンダーの掲載枠を<span className="font-semibold text-orange-600">解放</span>します</span>
-                    </div>
-                  </div>
-
-                  <Separator />
-
-                  <div className="text-sm text-muted-foreground space-y-1">
-                    <p><span className="font-medium text-foreground">案件ID:</span> {caseData.id}</p>
-                    <p><span className="font-medium text-foreground">法人名:</span> {caseData.corporateName}</p>
-                    <p><span className="font-medium text-foreground">店舗名:</span> {caseData.storeName}</p>
-                    {caseData.proposalSlots.length > 0 && (
-                      <div>
-                        <p className="font-medium text-foreground mb-1">対象掲載枠:</p>
-                        {caseData.proposalSlots.map((s) => (
-                          <p key={s.id} className="ml-3">
-                            {s.areaName || "未設定"} / {format(s.startDate, "yyyy/MM/dd", { locale: ja })} 〜 {format(s.endDate, "yyyy/MM/dd", { locale: ja })} ({s.bannerType})
-                          </p>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">停止理由</Label>
+                  <Textarea
+                    value={stopReason}
+                    onChange={(e) => setStopReason(e.target.value)}
+                    rows={5}
+                    placeholder="掲載停止の理由を入力してください..."
+                    className="text-sm"
+                  />
                 </div>
               </div>
               <DialogFooter>
@@ -1811,8 +2259,17 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                 >
                   キャンセル
                 </Button>
-                <Button variant="destructive" onClick={handleStopPublishing}>
-                  掲載を停止する
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    const reason = stopReason || generateStopRequestText();
+                    setStopReason(reason);
+                    handleStopPublishing();
+                  }}
+                  disabled={!stopReason.trim()}
+                >
+                  <StopCircle className="mr-2 h-4 w-4" />
+                  掲載停止を依頼
                 </Button>
               </DialogFooter>
             </>
@@ -1861,6 +2318,7 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
     </div>
   );
 }

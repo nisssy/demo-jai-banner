@@ -218,7 +218,6 @@ export type BannerType =
   | "都道府県バナー";
 
 export const bannerTypeOptions: BannerType[] = [
-  "バナー各種",
   "【FP課】マイページバナー",
   "お知らせバナー",
   "サブバナー",
@@ -231,7 +230,7 @@ export const bannerTypeOptions: BannerType[] = [
   "都道府県バナー",
 ];
 
-// イベント区分の選択肢
+// 商材名の選択肢（バナーのみ）
 export const eventTypeOptions: BannerType[] = [
   "バナー各種",
 ];
@@ -245,11 +244,8 @@ export const materialCategoryOptions: MaterialCategory[] = [
   "オプション",
 ];
 
-// 商材名の選択肢
+// 商材名の選択肢（〇〇バナーのみ）
 export const materialNameOptions: string[] = [
-  "トリニティーガール",
-  "合同抽選会",
-  "LINE広告",
   "お知らせバナー",
   "メインバナー",
   "サブバナー",

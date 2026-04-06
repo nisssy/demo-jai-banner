@@ -165,10 +165,10 @@ export function MaterialAddForm({ caseId, onBack }: MaterialAddFormProps) {
                   <Separator />
                 </div>
 
-                {/* カテゴリ / イベント区分 */}
+                {/* 商材区分 / 商材名 */}
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label className="text-sm">カテゴリ</Label>
+                    <Label className="text-sm">商材区分</Label>
                     <Select
                       value={material.category}
                       onValueChange={(val) =>
@@ -186,7 +186,7 @@ export function MaterialAddForm({ caseId, onBack }: MaterialAddFormProps) {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-sm">イベント区分</Label>
+                    <Label className="text-sm">商材名</Label>
                     <Select
                       value={material.eventType}
                       onValueChange={(val) =>
@@ -194,7 +194,7 @@ export function MaterialAddForm({ caseId, onBack }: MaterialAddFormProps) {
                       }
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="イベント区分を検索..." />
+                        <SelectValue placeholder="商材名を検索..." />
                       </SelectTrigger>
                       <SelectContent>
                         {eventTypeOptions.map((type) => (

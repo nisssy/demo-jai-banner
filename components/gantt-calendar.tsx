@@ -37,6 +37,7 @@ import { ja } from "date-fns/locale";
 interface GanttCalendarProps {
   proposalSlots: ProposalSlot[];
   onSelectSlot?: (slotId: string) => void;
+  onCreateRecord?: (startDate: Date, endDate: Date) => void;
 }
 
 const TOTAL_DAYS = 28;
@@ -66,6 +67,7 @@ const allPrefectures = Array.from(
 export function GanttCalendar({
   proposalSlots,
   onSelectSlot,
+  onCreateRecord,
 }: GanttCalendarProps) {
   const today = startOfDay(new Date());
 
@@ -74,6 +76,11 @@ export function GanttCalendar({
     // Default: start ~3 days before today so today is visible
     return subDays(today, 3);
   });
+
+  // 期間選択モード
+  const [isSelectingRange, setIsSelectingRange] = useState(false);
+  const [selectionStart, setSelectionStart] = useState<Date | null>(null);
+  const [selectionEnd, setSelectionEnd] = useState<Date | null>(null);
 
   // Filters
   const [prefectureFilter, setPrefectureFilter] = useState<string>("all");
@@ -276,9 +283,49 @@ export function GanttCalendar({
           </SelectContent>
         </Select>
 
-        <div className="ml-auto">
-          <Button variant="outline" size="sm" className="text-sm">
-            期間を選択してレコード作成
+        <div className="ml-auto flex items-center gap-2">
+          {isSelectingRange && selectionStart && selectionEnd && (
+            <Button
+              size="sm"
+              className="text-sm"
+              onClick={() => {
+                const start = selectionStart < selectionEnd ? selectionStart : selectionEnd;
+                const end = selectionStart < selectionEnd ? selectionEnd : selectionStart;
+                onCreateRecord?.(start, end);
+                setIsSelectingRange(false);
+                setSelectionStart(null);
+                setSelectionEnd(null);
+              }}
+            >
+              レコード作成
+            </Button>
+          )}
+          {isSelectingRange && (
+            <span className="text-xs text-muted-foreground">
+              {selectionStart && selectionEnd
+                ? `${format(selectionStart < selectionEnd ? selectionStart : selectionEnd, "M/d")} 〜 ${format(selectionStart < selectionEnd ? selectionEnd : selectionStart, "M/d")}`
+                : selectionStart
+                  ? `${format(selectionStart, "M/d")} 〜 終了日をクリック`
+                  : "開始日をクリック"}
+            </span>
+          )}
+          <Button
+            variant={isSelectingRange ? "default" : "outline"}
+            size="sm"
+            className="text-sm"
+            onClick={() => {
+              if (isSelectingRange) {
+                setIsSelectingRange(false);
+                setSelectionStart(null);
+                setSelectionEnd(null);
+              } else {
+                setIsSelectingRange(true);
+                setSelectionStart(null);
+                setSelectionEnd(null);
+              }
+            }}
+          >
+            {isSelectingRange ? "選択をキャンセル" : "期間を選択してレコード作成"}
           </Button>
         </div>
       </div>
@@ -351,23 +398,47 @@ export function GanttCalendar({
                   const isToday = isSameDay(day, today);
                   const isSat = isSaturday(day);
                   const isSun = isSunday(day);
+                  // 選択範囲のハイライト
+                  const isInSelection = (() => {
+                    if (!isSelectingRange || !selectionStart) return false;
+                    if (!selectionEnd) return isSameDay(day, selectionStart);
+                    const s = selectionStart < selectionEnd ? selectionStart : selectionEnd;
+                    const e = selectionStart < selectionEnd ? selectionEnd : selectionStart;
+                    return isWithinInterval(day, { start: s, end: e });
+                  })();
                   return (
                     <div
                       key={i}
                       className={cn(
                         "text-center border-r py-0.5 flex flex-col items-center justify-center",
-                        isToday && "bg-amber-100",
-                        !isToday && isSat && "bg-blue-50",
-                        !isToday && isSun && "bg-red-50"
+                        isInSelection && "bg-blue-200 ring-1 ring-blue-400",
+                        !isInSelection && isToday && "bg-amber-100",
+                        !isInSelection && !isToday && isSat && "bg-blue-50",
+                        !isInSelection && !isToday && isSun && "bg-red-50",
+                        isSelectingRange && "cursor-pointer hover:bg-blue-100"
                       )}
                       style={{ width: DAY_COL_WIDTH }}
+                      onClick={() => {
+                        if (!isSelectingRange) return;
+                        if (!selectionStart) {
+                          setSelectionStart(day);
+                          setSelectionEnd(null);
+                        } else if (!selectionEnd) {
+                          setSelectionEnd(day);
+                        } else {
+                          // Reset and start new selection
+                          setSelectionStart(day);
+                          setSelectionEnd(null);
+                        }
+                      }}
                     >
                       <span
                         className={cn(
                           "text-[10px] leading-tight font-medium",
-                          isSat && "text-blue-600",
-                          isSun && "text-red-500",
-                          isToday && "text-amber-700 font-bold"
+                          isInSelection && "text-blue-800",
+                          !isInSelection && isSat && "text-blue-600",
+                          !isInSelection && isSun && "text-red-500",
+                          !isInSelection && isToday && "text-amber-700 font-bold"
                         )}
                       >
                         {format(day, "d")}
@@ -375,9 +446,10 @@ export function GanttCalendar({
                       <span
                         className={cn(
                           "text-[9px] leading-tight",
-                          isSat && "text-blue-500",
-                          isSun && "text-red-400",
-                          isToday && "text-amber-600"
+                          isInSelection && "text-blue-700",
+                          !isInSelection && isSat && "text-blue-500",
+                          !isInSelection && isSun && "text-red-400",
+                          !isInSelection && isToday && "text-amber-600"
                         )}
                       >
                         {format(day, "E", { locale: ja })}
@@ -434,15 +506,19 @@ export function GanttCalendar({
                       <div
                         key={booking.id}
                         className={cn(
-                          "flex border-b hover:bg-gray-50 transition-colors cursor-pointer",
+                          "flex border-b hover:bg-gray-50 transition-colors",
                           isEven ? "bg-white" : "bg-gray-50/50"
                         )}
-                        onClick={() => onSelectSlot?.(booking.id)}
                       >
                         {/* Left label */}
                         <div
-                          className="shrink-0 border-r px-2 py-1.5 flex items-center gap-1.5 overflow-hidden"
+                          className="shrink-0 border-r px-2 py-1.5 flex items-center gap-1.5 overflow-hidden cursor-pointer"
                           style={{ width: LEFT_PANEL_WIDTH }}
+                          onClick={() => {
+                            if (!isSelectingRange) {
+                              onSelectSlot?.(booking.id);
+                            }
+                          }}
                         >
                           <span className="text-[10px] text-gray-400 font-mono shrink-0">
                             [{booking.hallId || "---"}]
@@ -478,22 +554,48 @@ export function GanttCalendar({
                             height: 32,
                           }}
                         >
-                          {/* Grid lines and weekend/today highlights */}
-                          <div className="absolute inset-0 flex">
+                          {/* Grid lines and weekend/today highlights (clickable for date selection) */}
+                          <div className="absolute inset-0 flex z-[1]">
                             {days.map((day, i) => {
                               const isToday = isSameDay(day, today);
                               const isSat = isSaturday(day);
                               const isSun = isSunday(day);
+                              const isInGridSelection = (() => {
+                                if (!selectionStart) return false;
+                                if (!selectionEnd) return isSameDay(day, selectionStart);
+                                const s = selectionStart < selectionEnd ? selectionStart : selectionEnd;
+                                const e = selectionStart < selectionEnd ? selectionEnd : selectionStart;
+                                return isWithinInterval(day, { start: s, end: e });
+                              })();
                               return (
                                 <div
                                   key={i}
                                   className={cn(
-                                    "border-r h-full",
-                                    isToday && "bg-amber-50",
-                                    !isToday && isSat && "bg-blue-50/50",
-                                    !isToday && isSun && "bg-red-50/50"
+                                    "border-r h-full cursor-pointer",
+                                    isInGridSelection && "bg-blue-200/70",
+                                    !isInGridSelection && isToday && "bg-amber-50",
+                                    !isInGridSelection && !isToday && isSat && "bg-blue-50/50",
+                                    !isInGridSelection && !isToday && isSun && "bg-red-50/50",
+                                    "hover:bg-blue-100/50"
                                   )}
                                   style={{ width: DAY_COL_WIDTH }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    // 自動的に選択モードに入る
+                                    if (!isSelectingRange) {
+                                      setIsSelectingRange(true);
+                                      setSelectionStart(day);
+                                      setSelectionEnd(null);
+                                    } else if (!selectionStart) {
+                                      setSelectionStart(day);
+                                      setSelectionEnd(null);
+                                    } else if (!selectionEnd) {
+                                      setSelectionEnd(day);
+                                    } else {
+                                      setSelectionStart(day);
+                                      setSelectionEnd(null);
+                                    }
+                                  }}
                                 />
                               );
                             })}
@@ -503,7 +605,7 @@ export function GanttCalendar({
                           {bar && (
                             <div
                               className={cn(
-                                "absolute top-1 rounded-sm shadow-sm flex items-center px-1.5 overflow-hidden",
+                                "absolute top-1 rounded-sm shadow-sm flex items-center px-1.5 overflow-hidden pointer-events-none",
                                 bannerColorMap[booking.bannerType] ||
                                   "bg-gray-400",
                                 booking.isProposal &&
@@ -513,6 +615,7 @@ export function GanttCalendar({
                                 left: bar.left + 1,
                                 width: bar.width,
                                 height: 22,
+                                zIndex: 0,
                               }}
                               title={`${booking.hallName} (${format(booking.startDate, "M/d")}〜${format(booking.endDate, "M/d")})`}
                             >

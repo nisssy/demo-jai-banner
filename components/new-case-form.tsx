@@ -5,6 +5,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -17,52 +19,82 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
-import { ChevronLeft, ChevronUp, ChevronDown, Plus } from "lucide-react";
-import { mockAnniversaryPacks, initialCompanies, initialHalls, bannerTypeOptions, eventTypeOptions } from "@/lib/types";
-import type { CompanyData, HallData } from "@/lib/types";
+import { StatusBadge } from "@/components/status-badge";
+import { ChevronLeft, ChevronUp, ChevronDown, Plus, Trash2 } from "lucide-react";
+import {
+  initialCompanies,
+  initialHalls,
+  materialCategoryOptions,
+  materialNameOptions,
+} from "@/lib/types";
+import type {
+  CompanyData,
+  HallData,
+  SearchConditions,
+  ProposalSlot,
+  MaterialCategory,
+  BannerType,
+} from "@/lib/types";
 import { CompanyHallCombobox } from "@/components/company-hall-combobox";
+import { GanttCalendar } from "@/components/gantt-calendar";
 import { useCaseStore } from "@/lib/case-store";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 
-interface MaterialItem {
+// レコード（商材）入力用の型
+interface RecordItem {
   id: string;
-  category: string;
-  eventType: string;
+  recordNumber: string;
+  materialCategory: string;
+  materialName: string;
+  bannerType: string;
+  startDate: string;
+  endDate: string;
+  areaName: string;
+  implementationPolicy: string;
   isOpen: boolean;
-  usageMethod: "anniversary" | "single" | "";
-  selectedPackId: string;
-  billingAmount: string;
 }
 
 interface NewCaseFormProps {
   onBack: () => void;
   onCaseCreated: (caseId: string) => void;
+  searchConditions?: SearchConditions;
 }
 
-export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
+function generateRecordNumber(idx: number) {
+  return String(13828 + idx + Math.floor(Math.random() * 1000));
+}
+
+export function NewCaseForm({ onBack, onCaseCreated, searchConditions }: NewCaseFormProps) {
   const { createCase } = useCaseStore();
 
-  const [selectedCompany, setSelectedCompany] = useState<CompanyData | null>(null);
-  const [selectedHall, setSelectedHall] = useState<HallData | null>(null);
-  const [caseName, setCaseName] = useState("");
-  const [staffName, setStaffName] = useState("");
+  // 検索条件から法人・ホールを自動入力
+  const initialCompany = searchConditions?.corporate && searchConditions.corporate !== "all"
+    ? initialCompanies.find(c => String(c.id) === searchConditions.corporate) ?? null
+    : null;
+  const initialHallData = searchConditions?.hall && searchConditions.hall !== "all"
+    ? initialHalls.find(h => String(h.id) === searchConditions.hall) ?? null
+    : null;
+
+  const [selectedCompany, setSelectedCompany] = useState<CompanyData | null>(initialCompany);
+  const [selectedHall, setSelectedHall] = useState<HallData | null>(initialHallData);
+  const [caseName, setCaseName] = useState(initialHallData?.name || initialCompany?.name || "");
+  const [staffName, setStaffName] = useState(searchConditions?.staff || "");
   const [requestDate, setRequestDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [corpIdInput, setCorpIdInput] = useState(initialCompany?.companyId ?? "");
+  const [hallIdInput, setHallIdInput] = useState(initialHallData?.hallId ?? "");
 
-  const [materials, setMaterials] = useState<MaterialItem[]>([
-    { id: "1", category: "", eventType: "", isOpen: true, usageMethod: "", selectedPackId: "", billingAmount: "" },
-  ]);
+  // 商材（レコード）一覧
+  const [records, setRecords] = useState<RecordItem[]>([]);
 
-  const [corpIdInput, setCorpIdInput] = useState("");
-  const [hallIdInput, setHallIdInput] = useState("");
+  // アクティブなレコード（テーブルクリックで選択 → 下の詳細セクションをスクロール）
+  const [activeRecordId, setActiveRecordId] = useState<string | null>(null);
 
   const corpId = selectedCompany?.companyId ?? corpIdInput;
   const hallId = selectedHall?.hallId ?? hallIdInput;
   const hallSalesPerson = selectedHall?.salesPersonName ?? "";
 
-  // ホールIDを手入力した場合、マスタから自動選択
   const handleHallIdChange = (value: string) => {
     setHallIdInput(value);
     const matched = initialHalls.find((h) => h.hallId === value);
@@ -73,7 +105,6 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
     }
   };
 
-  // 法人IDを手入力した場合、マスタから自動選択
   const handleCorpIdChange = (value: string) => {
     setCorpIdInput(value);
     const matched = initialCompanies.find((c) => c.companyId === value);
@@ -84,106 +115,87 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
     }
   };
 
-  const addMaterial = () => {
-    setMaterials([
-      ...materials,
-      {
-        id: String(Date.now()),
-        category: "",
-        eventType: "",
-        isOpen: true,
-        usageMethod: "",
-        selectedPackId: "",
-        billingAmount: "",
-      },
+  // 商材を追加
+  const handleAddRecord = () => {
+    const now = new Date();
+    const weekLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const newRec: RecordItem = {
+      id: `rec-${Date.now()}`,
+      recordNumber: generateRecordNumber(records.length),
+      materialCategory: "",
+      materialName: "",
+      bannerType: "メインバナー",
+      startDate: format(now, "yyyy-MM-dd"),
+      endDate: format(weekLater, "yyyy-MM-dd"),
+      areaName: "",
+      implementationPolicy: "",
+      isOpen: true,
+    };
+    // 既存のレコードは閉じて、新しいのだけ開く
+    setRecords(prev => [
+      ...prev.map(r => ({ ...r, isOpen: false })),
+      newRec,
     ]);
+    setActiveRecordId(newRec.id);
   };
 
-  const toggleMaterial = (id: string) => {
-    setMaterials(
-      materials.map((m) => (m.id === id ? { ...m, isOpen: !m.isOpen } : m))
-    );
+  // レコード更新
+  const updateRecord = (id: string, updates: Partial<RecordItem>) => {
+    setRecords(prev => prev.map(r => r.id === id ? { ...r, ...updates } : r));
   };
 
-  const updateMaterial = (id: string, field: keyof MaterialItem, value: string) => {
-    setMaterials(
-      materials.map((m) => (m.id === id ? { ...m, [field]: value } : m))
-    );
+  // レコード削除
+  const deleteRecord = (id: string) => {
+    setRecords(prev => prev.filter(r => r.id !== id));
+    if (activeRecordId === id) setActiveRecordId(null);
   };
 
-  const updateMaterialFields = (id: string, updates: Partial<MaterialItem>) => {
-    setMaterials(
-      materials.map((m) => (m.id === id ? { ...m, ...updates } : m))
-    );
+  // レコードの開閉トグル
+  const toggleRecord = (id: string) => {
+    setRecords(prev => prev.map(r => r.id === id ? { ...r, isOpen: !r.isOpen } : r));
   };
 
-  // フォーム全体のバリデーション（ホールのみオプショナル、それ以外は必須）
-  // 商材情報は任意：未入力の商材はスキップし、入力途中の商材のみバリデーション
-  const isFormValid = (() => {
-    if (!selectedCompany) return false;
-    if (!caseName.trim()) return false;
-    // 商材情報：一部でも入力されている商材は全項目必須
-    const partiallyFilledMaterials = materials.filter(
-      (m) => m.category || m.eventType || m.usageMethod
-    );
-    const allPartialValid = partiallyFilledMaterials.every((m) => {
-      if (!m.category || !m.eventType || !m.usageMethod) return false;
-      if (m.usageMethod === "anniversary" && !m.selectedPackId) return false;
-      return true;
-    });
-    if (!allPartialValid) return false;
-    return true;
-  })();
+  // records→ProposalSlots変換（ガントチャート用）
+  const proposalSlots: ProposalSlot[] = records
+    .filter(r => r.startDate && r.endDate)
+    .map(r => ({
+      id: r.id,
+      recordNumber: r.recordNumber,
+      startDate: new Date(r.startDate),
+      endDate: new Date(r.endDate),
+      bannerType: (r.materialName || r.bannerType || "バナー各種") as BannerType,
+      materialCategory: (r.materialCategory || undefined) as MaterialCategory | undefined,
+      materialName: r.materialName || undefined,
+      areaName: r.areaName || undefined,
+    }));
 
-  // 選択中の法人に紐づく周年パック（mockAnniversaryPacksのcorporationIdは旧形式"corp-1"等）
-  const legacyCorporationId = selectedCompany
-    ? `corp-${selectedCompany.id}`
-    : null;
-  const corporationPacks = legacyCorporationId
-    ? mockAnniversaryPacks
-        .filter((p) => p.corporationId === legacyCorporationId)
-        .sort((a, b) => a.expiryDate.getTime() - b.expiryDate.getTime())
-    : [];
-  const hasPacks = corporationPacks.length > 0;
-  const nearestPack = corporationPacks.length > 0 ? corporationPacks[0] : null;
+  const isFormValid = !!selectedCompany && !!caseName.trim();
 
   const handleSubmit = () => {
     if (!isFormValid || !selectedCompany) return;
 
-    // フォームの商材情報を ProposalSlot に変換（入力済みの商材のみ）
-    const filledMaterials = materials.filter(
-      (m) => m.category && m.eventType && m.usageMethod
-    );
-    const proposalSlots = filledMaterials
-      .map((m) => ({
-        id: `slot-${Date.now()}-${m.id}`,
-        startDate: new Date(),
-        endDate: new Date(),
-        bannerType: m.eventType as import("@/lib/types").BannerType,
-      }));
-
-    // 請求額の合計を計算
-    const totalBilling = filledMaterials.reduce((sum, m) => {
-      const amount = m.billingAmount ? Number(m.billingAmount) : 0;
-      return sum + amount;
-    }, 0);
-
-    // 周年パック利用かどうか
-    const hasAnniversary = filledMaterials.some((m) => m.usageMethod === "anniversary");
-    const anniversaryPackId = filledMaterials.find((m) => m.selectedPackId)?.selectedPackId;
+    const slots = records.map(r => ({
+      id: `slot-${Date.now()}-${r.id}`,
+      recordNumber: r.recordNumber,
+      startDate: new Date(r.startDate),
+      endDate: new Date(r.endDate),
+      bannerType: (r.materialName || r.bannerType || "バナー各種") as BannerType,
+      materialCategory: (r.materialCategory || undefined) as MaterialCategory | undefined,
+      materialName: r.materialName || undefined,
+      areaName: r.areaName || undefined,
+    }));
 
     const newCase = createCase(selectedCompany.name, selectedHall?.name ?? "", {
       caseName: caseName.trim() || undefined,
       companyId: selectedCompany.companyId,
       hallId: selectedHall?.hallId,
       salesPersonName: hallSalesPerson || staffName || undefined,
-      proposalSlots,
-      billingAmount: totalBilling || undefined,
-      isAnniversaryPack: hasAnniversary || undefined,
-      anniversaryPackCode: anniversaryPackId || undefined,
+      proposalSlots: slots,
     });
     onCaseCreated(newCase.id);
   };
+
+  const circledNumbers = "\u2460\u2461\u2462\u2463\u2464\u2465\u2466\u2467\u2468\u2469";
 
   return (
     <div className="space-y-6">
@@ -201,9 +213,7 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
       {/* 基本情報カード */}
       <Card className="p-6">
         <h2 className="text-lg font-bold mb-6">基本情報</h2>
-
         <div className="space-y-5">
-          {/* 法人名・ホール名（コンボボックス） */}
           <div className="space-y-2">
             <Label className="text-sm">法人名・ホール名</Label>
             <CompanyHallCombobox
@@ -217,7 +227,6 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
                   setHallIdInput("");
                   setCaseName("");
                 } else {
-                  // 案件名のデフォルト値をセット（法人名のみ）
                   setCaseName(company.name);
                 }
               }}
@@ -225,14 +234,12 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
                 setSelectedHall(hall);
                 setHallIdInput(hall?.hallId ?? "");
                 if (hall && selectedCompany) {
-                  // 案件名のデフォルト値をセット（ホール名）
                   setCaseName(hall.name);
                 }
               }}
             />
           </div>
 
-          {/* 法人ID / ホールID */}
           <div className="grid grid-cols-2 gap-6">
             <div className="space-y-2">
               <Label className="text-sm">法人ID</Label>
@@ -252,7 +259,6 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
             </div>
           </div>
 
-          {/* 案件名 */}
           <div className="space-y-2">
             <Label className="text-sm">案件名</Label>
             <Input
@@ -262,7 +268,6 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
             />
           </div>
 
-          {/* ホール担当営業 / 依頼日 */}
           <div className="grid grid-cols-2 gap-6">
             <div className="space-y-2">
               <Label className="text-sm">ホール担当営業</Label>
@@ -288,16 +293,125 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
         </div>
       </Card>
 
-      {/* 商材情報セクション */}
-      {materials.map((material, idx) => (
-        <Card key={material.id} className="overflow-hidden">
-          <Collapsible open={material.isOpen} onOpenChange={() => toggleMaterial(material.id)}>
+      {/* ガントチャート（追加済みレコードを表示） */}
+      <GanttCalendar
+        proposalSlots={proposalSlots}
+        onCreateRecord={(startDate, endDate) => {
+          const newRec: RecordItem = {
+            id: `rec-${Date.now()}`,
+            recordNumber: generateRecordNumber(records.length),
+            materialCategory: "",
+            materialName: "",
+            bannerType: "メインバナー",
+            startDate: format(startDate, "yyyy-MM-dd"),
+            endDate: format(endDate, "yyyy-MM-dd"),
+            areaName: "",
+            implementationPolicy: "",
+            isOpen: true,
+          };
+          setRecords(prev => [
+            ...prev.map(r => ({ ...r, isOpen: false })),
+            newRec,
+          ]);
+          setActiveRecordId(newRec.id);
+        }}
+      />
+
+      {/* ===== 商材一覧テーブル ===== */}
+      <Card className="overflow-hidden">
+        <div className="p-6 pb-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold flex items-center gap-2">
+              商材一覧
+              <Badge variant="secondary" className="font-normal">
+                {records.length}件
+              </Badge>
+            </h2>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleAddRecord}
+              className="gap-1"
+            >
+              <Plus className="h-4 w-4" />
+              商材を追加
+            </Button>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-muted/30 border-y">
+                <th className="text-left p-3 font-semibold">レコード番号</th>
+                <th className="text-left p-3 font-semibold">商材区分</th>
+                <th className="text-left p-3 font-semibold">商材名</th>
+                <th className="text-left p-3 font-semibold">バナー種別</th>
+                <th className="text-left p-3 font-semibold">掲載開始日</th>
+                <th className="text-left p-3 font-semibold">掲載終了日</th>
+                <th className="text-left p-3 font-semibold">エリア</th>
+                <th className="text-left p-3 font-semibold">ステータス</th>
+              </tr>
+            </thead>
+            <tbody>
+              {records.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="p-6 text-center text-muted-foreground">
+                    商材が登録されていません
+                  </td>
+                </tr>
+              ) : (
+                records.map((rec) => (
+                  <tr
+                    key={rec.id}
+                    className="border-b hover:bg-muted/10 transition-colors cursor-pointer"
+                    onClick={() => {
+                      setActiveRecordId(rec.id);
+                      setRecords(prev => prev.map(r => ({
+                        ...r,
+                        isOpen: r.id === rec.id ? true : r.isOpen,
+                      })));
+                    }}
+                  >
+                    <td className="p-3">
+                      <span className="text-blue-600 hover:underline font-mono">
+                        {rec.recordNumber || "-"}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      {rec.materialCategory && (
+                        <Badge variant="outline" className="font-normal">{rec.materialCategory}</Badge>
+                      )}
+                    </td>
+                    <td className="p-3">{rec.materialName || "-"}</td>
+                    <td className="p-3">{rec.materialName || rec.bannerType}</td>
+                    <td className="p-3">
+                      {rec.startDate ? format(new Date(rec.startDate), "yyyy/MM/dd", { locale: ja }) : "-"}
+                    </td>
+                    <td className="p-3">
+                      {rec.endDate ? format(new Date(rec.endDate), "yyyy/MM/dd", { locale: ja }) : "-"}
+                    </td>
+                    <td className="p-3">{rec.areaName || "-"}</td>
+                    <td className="p-3">
+                      <Badge variant="secondary" className="bg-blue-100 text-blue-800 font-normal">提案中</Badge>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* ===== 商材情報セクション（詳細入力） ===== */}
+      {records.map((rec, idx) => (
+        <Card key={rec.id} className="overflow-hidden">
+          <Collapsible open={rec.isOpen} onOpenChange={() => toggleRecord(rec.id)}>
             <CollapsibleTrigger asChild>
               <div className="flex items-center justify-between p-6 cursor-pointer hover:bg-muted/10 transition-colors">
                 <h2 className="text-lg font-bold">
-                  商材情報{"\u2460\u2461\u2462\u2463\u2464\u2465\u2466\u2467\u2468\u2469"[idx] || `(${idx + 1})`}
+                  商材情報{circledNumbers[idx] || `(${idx + 1})`}
                 </h2>
-                {material.isOpen ? (
+                {rec.isOpen ? (
                   <ChevronUp className="h-5 w-5 text-muted-foreground" />
                 ) : (
                   <ChevronDown className="h-5 w-5 text-muted-foreground" />
@@ -306,182 +420,98 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
             </CollapsibleTrigger>
             <CollapsibleContent>
               <div className="px-6 pb-6 space-y-6">
-                {/* ===== カテゴリ・イベント区分・利用方法 ===== */}
-                <div className="space-y-5">
-                  <div className="grid grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">カテゴリ</Label>
-                      <Select
-                        value={material.category || undefined}
-                        onValueChange={(val) =>
-                          updateMaterialFields(material.id, {
-                            category: val,
-                            eventType: "",
-                            usageMethod: "",
-                            selectedPackId: "",
-                            billingAmount: "",
-                          })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="選択してください" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="event">イベント</SelectItem>
-                          <SelectItem value="option">オプション</SelectItem>
-                          <SelectItem value="point">ポイント</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">イベント区分</Label>
-                      <Select
-                        value={material.eventType || undefined}
-                        onValueChange={(val) => {
-                          const defaultMethod = hasPacks ? "anniversary" : "single";
-                          const defaultPack = hasPacks && nearestPack ? nearestPack.id : "";
-                          updateMaterialFields(material.id, {
-                            eventType: val,
-                            usageMethod: defaultMethod,
-                            selectedPackId: defaultPack,
-                            billingAmount: "",
-                          });
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="選択してください" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {eventTypeOptions.map((type) => (
-                            <SelectItem key={type} value={type}>{type}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                {/* 商材区分・商材名 */}
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">商材区分</Label>
+                    <Select
+                      value={rec.materialCategory || undefined}
+                      onValueChange={(val) => updateRecord(rec.id, { materialCategory: val })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="選択してください" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {materialCategoryOptions.map(cat => (
+                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">商材名</Label>
+                    <Select
+                      value={rec.materialName || undefined}
+                      onValueChange={(val) => updateRecord(rec.id, { materialName: val, bannerType: val })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="選択してください" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {materialNameOptions.map(name => (
+                          <SelectItem key={name} value={name}>{name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
 
-                  {/* 利用方法（イベント区分選択後に表示） */}
-                  {material.eventType ? (
-                    <>
-                      <Separator />
-                      <div className="space-y-4">
-                        <Label className="text-sm font-medium">利用方法</Label>
-                        <RadioGroup
-                          value={material.usageMethod}
-                          onValueChange={(val) => {
-                            const updates: Partial<MaterialItem> = {
-                              usageMethod: val as "anniversary" | "single",
-                            };
-                            if (val === "anniversary" && nearestPack) {
-                              updates.selectedPackId = nearestPack.id;
-                              updates.billingAmount = "";
-                            } else if (val === "single") {
-                              updates.selectedPackId = "";
-                            }
-                            updateMaterialFields(material.id, updates);
-                          }}
-                          className="space-y-3"
-                        >
-                          {/* 周年パックで実施 */}
-                          <div
-                            className={`flex items-start gap-3 rounded-lg border p-4 ${
-                              material.usageMethod === "anniversary"
-                                ? "border-blue-300 bg-blue-50/50"
-                                : "border-muted"
-                            } ${!hasPacks ? "opacity-50" : ""}`}
-                          >
-                            <RadioGroupItem
-                              value="anniversary"
-                              id={`new-usage-anniversary-${material.id}`}
-                              disabled={!hasPacks}
-                              className="mt-0.5"
-                            />
-                            <div className="flex-1 space-y-3">
-                              <Label
-                                htmlFor={`new-usage-anniversary-${material.id}`}
-                                className={`text-sm font-medium ${!hasPacks ? "cursor-not-allowed" : "cursor-pointer"}`}
-                              >
-                                周年パックで実施
-                              </Label>
-                              {!hasPacks && (
-                                <p className="text-xs text-muted-foreground">
-                                  この法人は周年パックを購入していません
-                                </p>
-                              )}
+                <Separator />
 
-                              {material.usageMethod === "anniversary" && hasPacks && (
-                                <div className="space-y-2 pt-1">
-                                  {corporationPacks.map((pack) => (
-                                    <label
-                                      key={pack.id}
-                                      className={`flex items-center justify-between rounded-md border p-3 cursor-pointer transition-colors ${
-                                        material.selectedPackId === pack.id
-                                          ? "border-blue-400 bg-blue-50"
-                                          : "border-muted hover:bg-muted/30"
-                                      }`}
-                                      onClick={() =>
-                                        updateMaterialFields(material.id, {
-                                          selectedPackId: pack.id,
-                                        })
-                                      }
-                                    >
-                                      <div className="flex items-center gap-3">
-                                        <div
-                                          className={`h-4 w-4 rounded-full border-2 flex items-center justify-center ${
-                                            material.selectedPackId === pack.id
-                                              ? "border-blue-500"
-                                              : "border-muted-foreground/40"
-                                          }`}
-                                        >
-                                          {material.selectedPackId === pack.id && (
-                                            <div className="h-2 w-2 rounded-full bg-blue-500" />
-                                          )}
-                                        </div>
-                                        <span className="text-sm font-medium">
-                                          {pack.title}
-                                        </span>
-                                      </div>
-                                      <span className="text-xs text-muted-foreground">
-                                        有効期限: {format(pack.expiryDate, "yyyy/MM/dd", { locale: ja })}
-                                      </span>
-                                    </label>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          </div>
+                {/* 掲載期間 */}
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">掲載開始日</Label>
+                    <Input
+                      type="date"
+                      value={rec.startDate}
+                      onChange={(e) => updateRecord(rec.id, { startDate: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">掲載終了日</Label>
+                    <Input
+                      type="date"
+                      value={rec.endDate}
+                      onChange={(e) => updateRecord(rec.id, { endDate: e.target.value })}
+                    />
+                  </div>
+                </div>
 
-                          {/* 単発で実施 */}
-                          <div
-                            className={`flex items-start gap-3 rounded-lg border p-4 ${
-                              material.usageMethod === "single"
-                                ? "border-blue-300 bg-blue-50/50"
-                                : "border-muted"
-                            }`}
-                          >
-                            <RadioGroupItem
-                              value="single"
-                              id={`new-usage-single-${material.id}`}
-                              className="mt-0.5"
-                            />
-                            <div className="flex-1">
-                              <Label
-                                htmlFor={`new-usage-single-${material.id}`}
-                                className="text-sm font-medium cursor-pointer"
-                              >
-                                単発で実施
-                              </Label>
-                            </div>
-                          </div>
-                        </RadioGroup>
-                      </div>
-                      <Separator />
-                    </>
-                  ) : (
-                    <div className="bg-muted/30 rounded-md p-4 text-sm text-muted-foreground">
-                      まず「イベント区分」を選択してください。選択後に、利用方法や請求額などの入力項目が表示されます。
-                    </div>
-                  )}
+                {/* エリア */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">エリア</Label>
+                  <Input
+                    placeholder="例: 渋谷エリアA枠"
+                    value={rec.areaName}
+                    onChange={(e) => updateRecord(rec.id, { areaName: e.target.value })}
+                  />
+                </div>
+
+                <Separator />
+
+                {/* 実施方針 */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">実施方針</Label>
+                  <Textarea
+                    placeholder="ターゲット層、配信目的、期待する効果などを記載してください..."
+                    value={rec.implementationPolicy}
+                    onChange={(e) => updateRecord(rec.id, { implementationPolicy: e.target.value })}
+                    rows={4}
+                  />
+                </div>
+
+                {/* 削除ボタン */}
+                <div className="flex justify-end pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-500 hover:text-red-700 gap-1"
+                    onClick={() => deleteRecord(rec.id)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    この商材を削除
+                  </Button>
                 </div>
               </div>
             </CollapsibleContent>
@@ -491,17 +521,8 @@ export function NewCaseForm({ onBack, onCaseCreated }: NewCaseFormProps) {
 
       {/* フッターアクション */}
       <div className="flex items-center justify-center gap-4 pb-8">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={(e) => {
-            e.preventDefault();
-            addMaterial();
-          }}
-          className="gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          商材を追加
+        <Button variant="outline" onClick={onBack}>
+          キャンセル
         </Button>
         <Button
           onClick={handleSubmit}

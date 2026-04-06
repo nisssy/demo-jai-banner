@@ -21,6 +21,9 @@ interface CaseStore {
   updateCase: (id: string, updates: Partial<Case>) => void;
   deleteCase: (id: string) => void;
   
+  // Duplicate
+  duplicateCase: (caseId: string, selectedSlotIds: string[]) => Case | null;
+
   // Proposal Actions
   addProposalSlot: (caseId: string, slot: ProposalSlot) => void;
   removeProposalSlot: (caseId: string, slotId: string) => void;
@@ -104,6 +107,35 @@ export const useCaseStore = create<CaseStore>((set, get) => ({
     }));
   },
   
+  duplicateCase: (caseId, selectedSlotIds) => {
+    const { cases } = get();
+    const original = cases.find((c) => c.id === caseId);
+    if (!original) return null;
+    const caseNum = cases.length + 1;
+    const duplicatedSlots: ProposalSlot[] = original.proposalSlots
+      .filter((s) => selectedSlotIds.includes(s.id))
+      .map((s) => ({
+        ...s,
+        id: `slot-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        recordNumber: String(13828 + Math.floor(Math.random() * 10000)),
+      }));
+    const newCase: Case = {
+      ...original,
+      id: `case-${Date.now()}`,
+      caseNumber: `PJ-${String(caseNum).padStart(3, "0")}`,
+      status: "提案中",
+      projectStatus: "提案中",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      proposalSlots: duplicatedSlots,
+      applicationDocumentUrl: undefined,
+      materials: [],
+      chatMessages: [],
+    };
+    set((state) => ({ cases: [newCase, ...state.cases] }));
+    return newCase;
+  },
+
   addProposalSlot: (caseId, slot) => {
     const { updateCase, cases } = get();
     const caseItem = cases.find((c) => c.id === caseId);

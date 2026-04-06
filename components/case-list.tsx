@@ -23,6 +23,7 @@ import {
   ChevronUp,
   ChevronLeft,
   FilePlus,
+  Copy,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -57,11 +58,13 @@ import {
   type SavedSearchCondition,
   type Case,
   type ProposalSlot,
+  type BannerType,
+  type MaterialCategory,
 } from "@/lib/types";
 
 interface CaseListProps {
   onSelectCase: (caseId: string) => void;
-  onOpenCreateForm?: () => void;
+  onOpenCreateForm?: (conditions?: SearchConditions) => void;
   onAddMaterial?: (caseId: string) => void;
   onSelectRecord?: (caseId: string, slotId: string) => void;
   onAddNewMaterial?: (caseId: string, materialCategory: string, materialName: string) => void;
@@ -85,10 +88,17 @@ const defaultConditions: SearchConditions = {
 };
 
 export function CaseList({ onSelectCase, onOpenCreateForm, onAddMaterial, onSelectRecord, onAddNewMaterial, searchConditionsFromParent }: CaseListProps) {
-  const { cases } = useCaseStore();
+  const { cases, duplicateCase, createCase } = useCaseStore();
   const [corporateOpen, setCorporateOpen] = useState(false);
   const [hallOpen, setHallOpen] = useState(false);
   const [materialNameOpen, setMaterialNameOpen] = useState(false);
+  const [materialCategoryOpen, setMaterialCategoryOpen] = useState(false);
+  const [areaOpen, setAreaOpen] = useState(false);
+
+  // 複製モーダル
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [duplicateTargetCaseId, setDuplicateTargetCaseId] = useState<string | null>(null);
+  const [duplicateSelectedSlots, setDuplicateSelectedSlots] = useState<string[]>([]);
 
   // 新規商材追加モーダル
   const [showAddMaterialModal, setShowAddMaterialModal] = useState(false);
@@ -291,18 +301,17 @@ export function CaseList({ onSelectCase, onOpenCreateForm, onAddMaterial, onSele
             className="gap-1"
             onClick={() => {
               setShowAddMaterialModal(true);
-              setAddMaterialStep(1);
               setSelectedCaseForMaterial(null);
               setNewMaterialCategory("");
               setNewMaterialName("");
             }}
           >
             <Plus className="h-4 w-4" />
-            新規商材追加
+            新規案件作成
           </Button>
           <Button
             className="bg-blue-600 hover:bg-blue-700 text-white gap-1"
-            onClick={onOpenCreateForm}
+            onClick={() => onOpenCreateForm?.(searchConditions)}
           >
             <Plus className="h-4 w-4" />
             新規案件作成
@@ -505,25 +514,57 @@ export function CaseList({ onSelectCase, onOpenCreateForm, onAddMaterial, onSele
               </Popover>
             </div>
 
-            {/* 部やエリア */}
+            {/* 部やエリア（input+selectコンボボックス） */}
             <div className="space-y-2">
               <Label className="text-xs font-bold">部やエリア</Label>
-              <Select
-                value={searchConditions.area}
-                onValueChange={(val) => setSearchConditions({...searchConditions, area: val})}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="エリアを選択..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">すべて</SelectItem>
-                  {areaRegionOptions.map((region) => (
-                    <SelectItem key={region} value={region}>
-                      {region}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={areaOpen} onOpenChange={setAreaOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={areaOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    {searchConditions.area && searchConditions.area !== "" && searchConditions.area !== "all"
+                      ? searchConditions.area
+                      : "部やエリアを検索..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="部やエリアを入力..." />
+                    <CommandList>
+                      <CommandEmpty>該当するエリアがありません</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="すべて"
+                          onSelect={() => {
+                            setSearchConditions({...searchConditions, area: "all"});
+                            setAreaOpen(false);
+                          }}
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", searchConditions.area === "all" ? "opacity-100" : "opacity-0")} />
+                          すべて
+                        </CommandItem>
+                        {areaRegionOptions.map((region) => (
+                          <CommandItem
+                            key={region}
+                            value={region}
+                            onSelect={() => {
+                              setSearchConditions({...searchConditions, area: region});
+                              setAreaOpen(false);
+                            }}
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", searchConditions.area === region ? "opacity-100" : "opacity-0")} />
+                            {region}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             {/* ステータス（複数選択） */}
@@ -565,23 +606,57 @@ export function CaseList({ onSelectCase, onOpenCreateForm, onAddMaterial, onSele
               </Popover>
             </div>
 
-            {/* 商材区分 */}
+            {/* 商材区分（input+selectコンボボックス） */}
             <div className="space-y-2">
-              <Label htmlFor="materialCategory" className="text-xs font-bold">商材区分</Label>
-              <Select
-                value={searchConditions.materialCategory}
-                onValueChange={(val) => setSearchConditions({...searchConditions, materialCategory: val})}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="すべて" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">すべて</SelectItem>
-                  {materialCategoryOptions.map((cat) => (
-                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label className="text-xs font-bold">商材区分</Label>
+              <Popover open={materialCategoryOpen} onOpenChange={setMaterialCategoryOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={materialCategoryOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    {searchConditions.materialCategory && searchConditions.materialCategory !== "" && searchConditions.materialCategory !== "all"
+                      ? searchConditions.materialCategory
+                      : "商材区分を検索..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="商材区分を入力..." />
+                    <CommandList>
+                      <CommandEmpty>該当する商材区分がありません</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="すべて"
+                          onSelect={() => {
+                            setSearchConditions({...searchConditions, materialCategory: "all"});
+                            setMaterialCategoryOpen(false);
+                          }}
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", searchConditions.materialCategory === "all" ? "opacity-100" : "opacity-0")} />
+                          すべて
+                        </CommandItem>
+                        {materialCategoryOptions.map((cat) => (
+                          <CommandItem
+                            key={cat}
+                            value={cat}
+                            onSelect={() => {
+                              setSearchConditions({...searchConditions, materialCategory: cat});
+                              setMaterialCategoryOpen(false);
+                            }}
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", searchConditions.materialCategory === cat ? "opacity-100" : "opacity-0")} />
+                            {cat}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             {/* 商材名（input+selectコンボボックス） */}
@@ -821,7 +896,199 @@ export function CaseList({ onSelectCase, onOpenCreateForm, onAddMaterial, onSele
             onSelectRecord?.(record.caseItem.id, slotId);
           }
         }}
+        onCreateRecord={(startDate, endDate) => {
+          setShowAddMaterialModal(true);
+          setSelectedCaseForMaterial(null);
+          setNewMaterialCategory("");
+          setNewMaterialName("");
+          setMaterialModalSearch(prev => ({
+            ...prev,
+            dateStart: format(startDate, "yyyy-MM-dd"),
+            dateEnd: format(endDate, "yyyy-MM-dd"),
+          }));
+        }}
       />
+
+      {/* 案件テーブル（複製ボタン付き） */}
+      <Card className="overflow-hidden">
+        <div className="p-4 border-b">
+          <h3 className="font-semibold">レコード一覧</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-muted/30 border-b">
+                <th className="text-left p-3 font-semibold text-xs whitespace-nowrap">案件番号</th>
+                <th className="text-left p-3 font-semibold text-xs whitespace-nowrap">レコード番号</th>
+                <th className="text-left p-3 font-semibold text-xs whitespace-nowrap">法人名</th>
+                <th className="text-left p-3 font-semibold text-xs whitespace-nowrap">ホール名</th>
+                <th className="text-left p-3 font-semibold text-xs whitespace-nowrap">ステータス</th>
+                <th className="text-left p-3 font-semibold text-xs whitespace-nowrap">商材名</th>
+                <th className="text-left p-3 font-semibold text-xs whitespace-nowrap">掲載期間</th>
+                <th className="text-right p-3 font-semibold text-xs whitespace-nowrap">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredRecords.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="p-6 text-center text-muted-foreground text-sm">
+                    該当するレコードがありません
+                  </td>
+                </tr>
+              ) : (
+                filteredRecords.map(({ caseItem, slot }, idx) => (
+                  <tr
+                    key={`${caseItem.id}-${slot.id}-${idx}`}
+                    className="border-b hover:bg-muted/10 transition-colors"
+                  >
+                    <td className="p-3">
+                      <button
+                        type="button"
+                        className="text-blue-600 hover:underline text-xs font-mono"
+                        onClick={() => onSelectCase(caseItem.id)}
+                      >
+                        {caseItem.caseNumber}
+                      </button>
+                    </td>
+                    <td className="p-3">
+                      <button
+                        type="button"
+                        className="text-blue-600 hover:underline text-xs font-mono"
+                        onClick={() => onSelectRecord?.(caseItem.id, slot.id)}
+                      >
+                        {slot.recordNumber || "-"}
+                      </button>
+                    </td>
+                    <td className="p-3 text-xs whitespace-nowrap">{caseItem.corporateName}</td>
+                    <td className="p-3 text-xs whitespace-nowrap">{caseItem.storeName}</td>
+                    <td className="p-3"><StatusBadge status={caseItem.status} /></td>
+                    <td className="p-3 text-xs">{slot.materialName || slot.bannerType}</td>
+                    <td className="p-3 text-xs whitespace-nowrap">
+                      {format(slot.startDate, "MM/dd")} - {format(slot.endDate, "MM/dd")}
+                    </td>
+                    <td className="p-3 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onSelectRecord?.(caseItem.id, slot.id)}
+                          className="text-xs"
+                        >
+                          詳細
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setDuplicateTargetCaseId(caseItem.id);
+                            setDuplicateSelectedSlots([slot.id]);
+                            setShowDuplicateModal(true);
+                          }}
+                          className="text-xs"
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* 複製モーダル */}
+      <Dialog open={showDuplicateModal} onOpenChange={(open) => {
+        setShowDuplicateModal(open);
+        if (!open) {
+          setDuplicateTargetCaseId(null);
+          setDuplicateSelectedSlots([]);
+        }
+      }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>案件を複製</DialogTitle>
+            <DialogDescription>
+              複製するレコードを選択してください。ステータスは初期状態（提案中）になります。
+            </DialogDescription>
+          </DialogHeader>
+          {(() => {
+            const targetCase = cases.find(c => c.id === duplicateTargetCaseId);
+            if (!targetCase) return null;
+            return (
+              <div className="space-y-4 py-2">
+                <div className="text-sm">
+                  <span className="font-semibold">案件: </span>
+                  {targetCase.caseNumber} - {targetCase.corporateName} {targetCase.storeName}
+                </div>
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-muted/30 border-b">
+                        <th className="w-10 p-2"></th>
+                        <th className="text-left p-2 text-xs font-semibold">レコード番号</th>
+                        <th className="text-left p-2 text-xs font-semibold">商材名</th>
+                        <th className="text-left p-2 text-xs font-semibold">期間</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {targetCase.proposalSlots.map(slot => (
+                        <tr key={slot.id} className="border-b hover:bg-muted/10 cursor-pointer" onClick={() => {
+                          setDuplicateSelectedSlots(prev =>
+                            prev.includes(slot.id) ? prev.filter(id => id !== slot.id) : [...prev, slot.id]
+                          );
+                        }}>
+                          <td className="p-2 text-center">
+                            <div className={cn(
+                              "w-4 h-4 rounded border-2 mx-auto flex items-center justify-center",
+                              duplicateSelectedSlots.includes(slot.id) ? "border-blue-600 bg-blue-600" : "border-gray-300"
+                            )}>
+                              {duplicateSelectedSlots.includes(slot.id) && <Check className="h-3 w-3 text-white" />}
+                            </div>
+                          </td>
+                          <td className="p-2 text-xs font-mono">{slot.recordNumber || "-"}</td>
+                          <td className="p-2 text-xs">{slot.materialName || slot.bannerType}</td>
+                          <td className="p-2 text-xs">{format(slot.startDate, "MM/dd")} - {format(slot.endDate, "MM/dd")}</td>
+                        </tr>
+                      ))}
+                      {targetCase.proposalSlots.length === 0 && (
+                        <tr>
+                          <td colSpan={4} className="p-4 text-center text-muted-foreground text-sm">
+                            レコードがありません
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDuplicateModal(false)}>
+              キャンセル
+            </Button>
+            <Button
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              disabled={duplicateSelectedSlots.length === 0}
+              onClick={() => {
+                if (duplicateTargetCaseId) {
+                  const newCase = duplicateCase(duplicateTargetCaseId, duplicateSelectedSlots);
+                  setShowDuplicateModal(false);
+                  setDuplicateTargetCaseId(null);
+                  setDuplicateSelectedSlots([]);
+                  if (newCase) {
+                    onSelectCase(newCase.id);
+                  }
+                }
+              }}
+            >
+              複製
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 保存ダイアログ */}
       <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
@@ -851,345 +1118,201 @@ export function CaseList({ onSelectCase, onOpenCreateForm, onAddMaterial, onSele
         </DialogContent>
       </Dialog>
 
-      {/* 新規商材追加モーダル */}
+      {/* 新規案件作成モーダル */}
       <Dialog open={showAddMaterialModal} onOpenChange={(open) => {
         setShowAddMaterialModal(open);
         if (!open) {
-          setAddMaterialStep(1);
           setSelectedCaseForMaterial(null);
           setNewMaterialCategory("");
           setNewMaterialName("");
+          setMaterialModalSearch({
+            corporate: "",
+            hall: "",
+            category: "",
+            event: "",
+            dateStart: "",
+            dateEnd: "",
+            staff: "",
+            caseNo: "",
+            caseName: "",
+          });
         }
       }}>
-        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
-          {addMaterialStep === 1 ? (
-            <>
-              <DialogHeader>
-                <DialogTitle>追加先案件を選択</DialogTitle>
-              </DialogHeader>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>新規案件を作成</DialogTitle>
+            <DialogDescription>案件の基本情報を入力してください。作成後、詳細画面で商材の追加などを行えます。</DialogDescription>
+          </DialogHeader>
 
-              {/* モーダル内検索フォーム */}
-              <div className="space-y-4 py-2">
-                <div className="grid grid-cols-3 gap-4">
-                  {/* 法人/ホール */}
-                  <div className="space-y-1">
-                    <Label className="text-xs font-bold">法人/ホール</Label>
-                    <Popover open={modalCorporateOpen} onOpenChange={setModalCorporateOpen}>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" role="combobox" className="w-full justify-between font-normal text-sm">
-                          {materialModalSearch.corporate
-                            ? initialCompanies.find(c => String(c.id) === materialModalSearch.corporate)?.name ?? "法人名を検索..."
-                            : "法人名を検索..."}
-                          <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                        <Command>
-                          <CommandInput placeholder="法人名で検索..." />
-                          <CommandList>
-                            <CommandEmpty>該当なし</CommandEmpty>
-                            <CommandGroup>
-                              {initialCompanies.map(corp => (
-                                <CommandItem key={String(corp.id)} value={corp.name} onSelect={() => {
-                                  setMaterialModalSearch(prev => ({ ...prev, corporate: String(corp.id) }));
-                                  setModalCorporateOpen(false);
-                                }}>
-                                  <Check className={cn("mr-2 h-4 w-4", materialModalSearch.corporate === String(corp.id) ? "opacity-100" : "opacity-0")} />
-                                  {corp.name}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-
-                  {/* 商品カテゴリ */}
-                  <div className="space-y-1">
-                    <Label className="text-xs font-bold">商品カテゴリ</Label>
-                    <Select value={materialModalSearch.category} onValueChange={val => setMaterialModalSearch(prev => ({ ...prev, category: val }))}>
-                      <SelectTrigger className="text-sm">
-                        <SelectValue placeholder="すべて" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">すべて</SelectItem>
-                        {materialCategoryOptions.map(cat => (
-                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* イベント区分 */}
-                  <div className="space-y-1">
-                    <Label className="text-xs font-bold">イベント区分</Label>
-                    <Select value={materialModalSearch.event} onValueChange={val => setMaterialModalSearch(prev => ({ ...prev, event: val }))}>
-                      <SelectTrigger className="text-sm">
-                        <SelectValue placeholder="すべて" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">すべて</SelectItem>
-                        {materialNameOptions.map(name => (
-                          <SelectItem key={name} value={name}>{name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* 期間 */}
-                  <div className="space-y-1">
-                    <Label className="text-xs font-bold">期間</Label>
-                    <div className="flex items-center gap-1">
-                      <Select defaultValue="date">
-                        <SelectTrigger className="w-[80px] text-xs">
-                          <SelectValue placeholder="実施日" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="date">実施日</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Input type="date" className="text-xs" value={materialModalSearch.dateStart} onChange={e => setMaterialModalSearch(prev => ({ ...prev, dateStart: e.target.value }))} />
-                      <span className="text-xs">~</span>
-                      <Input type="date" className="text-xs" value={materialModalSearch.dateEnd} onChange={e => setMaterialModalSearch(prev => ({ ...prev, dateEnd: e.target.value }))} />
-                    </div>
-                  </div>
-
-                  {/* ホール担当 */}
-                  <div className="space-y-1">
-                    <Label className="text-xs font-bold">ホール担当</Label>
-                    <Input placeholder="ホール担当を検索..." className="text-sm" value={materialModalSearch.staff} onChange={e => setMaterialModalSearch(prev => ({ ...prev, staff: e.target.value }))} />
-                  </div>
-
-                  {/* 案件No */}
-                  <div className="space-y-1">
-                    <Label className="text-xs font-bold">案件No</Label>
-                    <Input placeholder="案件Noを入力..." className="text-sm" value={materialModalSearch.caseNo} onChange={e => setMaterialModalSearch(prev => ({ ...prev, caseNo: e.target.value }))} />
-                  </div>
-                </div>
-
-                {/* 案件名 */}
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold">案件名</Label>
-                  <Input placeholder="案件名を入力..." className="text-sm w-1/3" value={materialModalSearch.caseName} onChange={e => setMaterialModalSearch(prev => ({ ...prev, caseName: e.target.value }))} />
-                </div>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-3 gap-4">
+              {/* 法人/ホール */}
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">法人/ホール</Label>
+                <Popover open={modalCorporateOpen} onOpenChange={setModalCorporateOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" role="combobox" className="w-full justify-between font-normal text-sm">
+                      {materialModalSearch.corporate
+                        ? initialCompanies.find(c => String(c.id) === materialModalSearch.corporate)?.name ?? "法人名を検索..."
+                        : "法人名を検索..."}
+                      <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="法人名で検索..." />
+                      <CommandList>
+                        <CommandEmpty>該当なし</CommandEmpty>
+                        <CommandGroup>
+                          {initialCompanies.map(corp => (
+                            <CommandItem key={String(corp.id)} value={corp.name} onSelect={() => {
+                              setMaterialModalSearch(prev => ({ ...prev, corporate: String(corp.id) }));
+                              setModalCorporateOpen(false);
+                              // 法人に紐づくホールがあれば自動選択
+                              const halls = initialHalls.filter(h => h.companyId === corp.id);
+                              if (halls.length > 0) {
+                                setMaterialModalSearch(prev => ({ ...prev, hall: halls[0].name }));
+                              }
+                            }}>
+                              <Check className={cn("mr-2 h-4 w-4", materialModalSearch.corporate === String(corp.id) ? "opacity-100" : "opacity-0")} />
+                              {corp.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
 
-              {/* 案件テーブル（案件番号、案件名、案件Noのみ） */}
-              <div className="border rounded-lg overflow-hidden mt-2">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-muted/30 border-b">
-                      <th className="w-10 p-2"></th>
-                      <th className="text-left p-2 font-semibold text-xs whitespace-nowrap">ステータス</th>
-                      <th className="text-left p-2 font-semibold text-xs whitespace-nowrap">レコードタイトル</th>
-                      <th className="text-left p-2 font-semibold text-xs whitespace-nowrap">発注日</th>
-                      <th className="text-left p-2 font-semibold text-xs whitespace-nowrap">レコード番号</th>
-                      <th className="text-left p-2 font-semibold text-xs whitespace-nowrap">店舗コード</th>
-                      <th className="text-left p-2 font-semibold text-xs whitespace-nowrap">店舗名</th>
-                      <th className="text-left p-2 font-semibold text-xs whitespace-nowrap">掲載開始希望日</th>
-                      <th className="text-left p-2 font-semibold text-xs whitespace-nowrap">掲載終了日</th>
-                      <th className="text-right p-2 font-semibold text-xs whitespace-nowrap">掲載日数</th>
-                      <th className="text-right p-2 font-semibold text-xs whitespace-nowrap">実NET額</th>
-                      <th className="text-right p-2 font-semibold text-xs whitespace-nowrap">日予算</th>
-                      <th className="text-left p-2 font-semibold text-xs whitespace-nowrap">キャンペーン目的</th>
-                      <th className="text-left p-2 font-semibold text-xs whitespace-nowrap">課金方式</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(() => {
-                      const modalFilteredCases = cases.filter(c => {
-                        if (materialModalSearch.corporate && materialModalSearch.corporate !== "all") {
-                          const company = initialCompanies.find(co => String(co.id) === materialModalSearch.corporate);
-                          if (company && c.corporateName !== company.name) return false;
-                        }
-                        if (materialModalSearch.caseName && !c.caseName?.toLowerCase().includes(materialModalSearch.caseName.toLowerCase()) && !c.corporateName.toLowerCase().includes(materialModalSearch.caseName.toLowerCase())) return false;
-                        if (materialModalSearch.caseNo && !c.caseNumber?.toLowerCase().includes(materialModalSearch.caseNo.toLowerCase())) return false;
-                        return true;
-                      });
+              {/* 商品カテゴリ */}
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">商品カテゴリ</Label>
+                <Select value={newMaterialCategory} onValueChange={setNewMaterialCategory}>
+                  <SelectTrigger className="text-sm">
+                    <SelectValue placeholder="選択してください" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {materialCategoryOptions.map(cat => (
+                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-                      // Flatten to records
-                      const modalRecords = modalFilteredCases.flatMap(caseItem =>
-                        caseItem.proposalSlots.length > 0
-                          ? caseItem.proposalSlots.map(slot => ({ caseItem, slot }))
-                          : [{ caseItem, slot: null as ProposalSlot | null }]
-                      );
-
-                      if (modalRecords.length === 0) {
-                        return (
-                          <tr>
-                            <td colSpan={14} className="p-6 text-center text-muted-foreground text-sm">
-                              案件がありません
-                            </td>
-                          </tr>
-                        );
-                      }
-
-                      return modalRecords.map(({ caseItem, slot }, idx) => {
-                        const netAmount = caseItem.billingAmount || (slot ? 50000 : 0);
-                        const days = slot ? getDaysCount(slot.startDate, slot.endDate) : 0;
-                        const dailyBudget = days > 0 ? Math.round(netAmount / days) : 0;
-                        return (
-                          <tr
-                            key={`${caseItem.id}-${slot?.id || "no-slot"}-${idx}`}
-                            className={cn(
-                              "border-b hover:bg-muted/10 cursor-pointer transition-colors",
-                              selectedCaseForMaterial === caseItem.id && "bg-blue-50"
-                            )}
-                            onClick={() => setSelectedCaseForMaterial(caseItem.id)}
+              {/* 商材名 */}
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">商材名</Label>
+                <Popover open={modalMaterialNameOpen} onOpenChange={setModalMaterialNameOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" role="combobox" className="w-full justify-between font-normal text-sm">
+                      {newMaterialName || "商材名を選択..."}
+                      <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="商材名を入力..." onValueChange={(val) => setNewMaterialName(val)} />
+                      <CommandList>
+                        <CommandEmpty>
+                          <button
+                            type="button"
+                            className="w-full text-left px-2 py-1.5 text-sm hover:bg-muted rounded"
+                            onClick={() => setModalMaterialNameOpen(false)}
                           >
-                            <td className="p-2 text-center">
-                              <div className={cn(
-                                "w-4 h-4 rounded border-2 mx-auto flex items-center justify-center",
-                                selectedCaseForMaterial === caseItem.id ? "border-blue-600 bg-blue-600" : "border-gray-300"
-                              )}>
-                                {selectedCaseForMaterial === caseItem.id && <Check className="h-3 w-3 text-white" />}
-                              </div>
-                            </td>
-                            <td className="p-2">
-                              <StatusBadge status={caseItem.status} />
-                            </td>
-                            <td className="p-2 text-xs whitespace-nowrap">レコードNo.{slot?.recordNumber || "-"}...</td>
-                            <td className="p-2 text-xs whitespace-nowrap">
-                              {format(caseItem.createdAt, "yyyy-MM-dd")}
-                            </td>
-                            <td className="p-2 text-xs font-mono">{slot?.recordNumber || "-"}</td>
-                            <td className="p-2">
-                              <span className="text-blue-600 text-xs">{caseItem.hallId || `P${String(idx + 1).padStart(5, "0")}`}</span>
-                            </td>
-                            <td className="p-2 text-xs whitespace-nowrap">{caseItem.storeName?.substring(0, 3)}...</td>
-                            <td className="p-2 text-xs whitespace-nowrap">
-                              {slot ? format(slot.startDate, "yyyy-MM-dd") : "-"}
-                            </td>
-                            <td className="p-2 text-xs whitespace-nowrap">
-                              {slot ? format(slot.endDate, "yyyy-MM-dd") : "-"}
-                            </td>
-                            <td className="p-2 text-xs text-right">{days > 0 ? `${days} 日間` : "-"}</td>
-                            <td className="p-2 text-xs text-right">¥ {netAmount.toLocaleString()}</td>
-                            <td className="p-2 text-xs text-right">¥ {dailyBudget.toLocaleString()}</td>
-                            <td className="p-2 text-xs">ウェブサイトアクセス</td>
-                            <td className="p-2 text-xs">CPC</td>
-                          </tr>
-                        );
-                      });
-                    })()}
-                  </tbody>
-                </table>
+                            「{newMaterialName}」を使用
+                          </button>
+                        </CommandEmpty>
+                        <CommandGroup>
+                          {materialNameOptions.map(name => (
+                            <CommandItem key={name} value={name} onSelect={() => {
+                              setNewMaterialName(name);
+                              setModalMaterialNameOpen(false);
+                            }}>
+                              <Check className={cn("mr-2 h-4 w-4", newMaterialName === name ? "opacity-100" : "opacity-0")} />
+                              {name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+
+            {/* 期間 */}
+            <div className="space-y-1">
+              <Label className="text-xs font-bold">期間</Label>
+              <div className="flex items-center gap-2 w-1/2">
+                <Input type="date" className="text-xs" value={materialModalSearch.dateStart} onChange={e => setMaterialModalSearch(prev => ({ ...prev, dateStart: e.target.value }))} />
+                <span className="text-xs shrink-0">~</span>
+                <Input type="date" className="text-xs" value={materialModalSearch.dateEnd} onChange={e => setMaterialModalSearch(prev => ({ ...prev, dateEnd: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              {/* ホール担当 */}
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">ホール担当</Label>
+                <Input placeholder="ホール担当を検索..." className="text-sm" value={materialModalSearch.staff} onChange={e => setMaterialModalSearch(prev => ({ ...prev, staff: e.target.value }))} />
               </div>
 
-              <DialogFooter className="mt-4">
-                <Button variant="outline" onClick={() => setShowAddMaterialModal(false)}>
-                  キャンセル
-                </Button>
-                <Button
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                  disabled={!selectedCaseForMaterial}
-                  onClick={() => setAddMaterialStep(2)}
-                >
-                  次へ
-                </Button>
-              </DialogFooter>
-            </>
-          ) : (
-            <>
-              {/* ステップ2: 商材の設定 */}
-              <DialogHeader>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setAddMaterialStep(1)}
-                    className="p-1 hover:bg-muted rounded-md transition-colors"
-                  >
-                    <ChevronLeft className="h-5 w-5" />
-                  </button>
-                  <DialogTitle>商材の設定</DialogTitle>
-                </div>
-              </DialogHeader>
-
-              <div className="py-8 space-y-6">
-                {/* 商材区分 */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-bold">商材区分</Label>
-                  <Select value={newMaterialCategory} onValueChange={setNewMaterialCategory}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="選択してください" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {materialCategoryOptions.map(cat => (
-                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">イベント、ポイント、オプション</p>
-                </div>
-
-                {/* 商材名 */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-bold">商材名</Label>
-                  <Popover open={modalMaterialNameOpen} onOpenChange={setModalMaterialNameOpen}>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" role="combobox" className="w-full justify-between font-normal">
-                        {newMaterialName || "商材名を選択または入力..."}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                      <Command>
-                        <CommandInput placeholder="商材名を入力..." onValueChange={(val) => setNewMaterialName(val)} />
-                        <CommandList>
-                          <CommandEmpty>
-                            <button
-                              type="button"
-                              className="w-full text-left px-2 py-1.5 text-sm hover:bg-muted rounded"
-                              onClick={() => setModalMaterialNameOpen(false)}
-                            >
-                              「{newMaterialName}」を使用
-                            </button>
-                          </CommandEmpty>
-                          <CommandGroup>
-                            {materialNameOptions.map(name => (
-                              <CommandItem key={name} value={name} onSelect={() => {
-                                setNewMaterialName(name);
-                                setModalMaterialNameOpen(false);
-                              }}>
-                                <Check className={cn("mr-2 h-4 w-4", newMaterialName === name ? "opacity-100" : "opacity-0")} />
-                                {name}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                  <p className="text-xs text-muted-foreground">トリニティーガール、合同抽選会、LINE広告、お知らせバナー、メインバナーなど</p>
-                </div>
+              {/* 案件No */}
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">案件No</Label>
+                <Input placeholder="自動採番" className="text-sm bg-muted/30" readOnly />
               </div>
+            </div>
 
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setShowAddMaterialModal(false)}>
-                  キャンセル
-                </Button>
-                <Button
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                  disabled={!newMaterialCategory || !newMaterialName}
-                  onClick={() => {
-                    if (selectedCaseForMaterial && newMaterialCategory && newMaterialName) {
-                      onAddNewMaterial?.(selectedCaseForMaterial, newMaterialCategory, newMaterialName);
-                      setShowAddMaterialModal(false);
-                      setAddMaterialStep(1);
-                      setSelectedCaseForMaterial(null);
-                      setNewMaterialCategory("");
-                      setNewMaterialName("");
-                    }
-                  }}
-                >
-                  追加
-                </Button>
-              </DialogFooter>
-            </>
-          )}
+            {/* 案件名 */}
+            <div className="space-y-1">
+              <Label className="text-xs font-bold">案件名</Label>
+              <Input placeholder="案件名を入力..." className="text-sm w-1/2" value={materialModalSearch.caseName} onChange={e => setMaterialModalSearch(prev => ({ ...prev, caseName: e.target.value }))} />
+            </div>
+          </div>
+
+          <DialogFooter className="mt-2">
+            <Button variant="outline" onClick={() => setShowAddMaterialModal(false)}>
+              キャンセル
+            </Button>
+            <Button
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              disabled={!materialModalSearch.corporate}
+              onClick={() => {
+                // 案件を作成
+                const company = initialCompanies.find(c => String(c.id) === materialModalSearch.corporate);
+                const companyHalls = initialHalls.filter(h => h.companyId === company?.id);
+                const hall = companyHalls[0];
+                const corporateName = company?.name || "未設定";
+                const storeName = hall?.name || materialModalSearch.hall || "未設定";
+                const caseName = materialModalSearch.caseName || `${corporateName} - ${storeName}`;
+
+                const newCase = createCase(corporateName, storeName, {
+                  caseName,
+                  salesPersonName: materialModalSearch.staff || hall?.salesPersonName || "山田 太郎",
+                  hallId: hall?.hallId,
+                  proposalSlots: (newMaterialCategory && newMaterialName) ? [{
+                    id: `slot-${Date.now()}`,
+                    recordNumber: String(13828 + Math.floor(Math.random() * 1000)),
+                    startDate: materialModalSearch.dateStart ? new Date(materialModalSearch.dateStart) : new Date(),
+                    endDate: materialModalSearch.dateEnd ? new Date(materialModalSearch.dateEnd) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    bannerType: (newMaterialName || "メインバナー") as BannerType,
+                    materialCategory: newMaterialCategory as MaterialCategory,
+                    materialName: newMaterialName,
+                  }] : [],
+                });
+
+                setShowAddMaterialModal(false);
+                setNewMaterialCategory("");
+                setNewMaterialName("");
+                // 作成した案件の詳細画面に遷移
+                onSelectCase(newCase.id);
+              }}
+            >
+              案件を作成
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
