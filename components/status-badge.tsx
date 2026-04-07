@@ -10,6 +10,10 @@ interface StatusBadgeProps {
 }
 
 const statusConfig: Record<CaseStatus, { label: string; className: string }> = {
+  "提案前": {
+    label: "提案前",
+    className: "bg-slate-100 text-slate-700 hover:bg-slate-100",
+  },
   "提案中": {
     label: "提案中",
     className: "bg-blue-100 text-blue-800 hover:bg-blue-100",
