@@ -51,6 +51,8 @@ import {
   initialCompanies,
   initialHalls,
   areaRegionOptions,
+  prefectureOptions,
+  departmentOptions,
   materialCategoryOptions,
   materialNameOptions,
   type CaseStatus,
@@ -74,7 +76,9 @@ interface CaseListProps {
 const defaultConditions: SearchConditions = {
   corporate: "",
   hall: "",
-  area: "",
+  prefectures: [],
+  areaRegions: [],
+  departments: [],
   statuses: [],
   materialCategory: "",
   materialName: "",
@@ -88,12 +92,15 @@ const defaultConditions: SearchConditions = {
 };
 
 export function CaseList({ onSelectCase, onOpenCreateForm, onAddMaterial, onSelectRecord, onAddNewMaterial, searchConditionsFromParent }: CaseListProps) {
-  const { cases, duplicateCase, createCase } = useCaseStore();
+  const { cases, duplicateCase, duplicateSlotsToSameCase, createCase } = useCaseStore();
+  const [duplicateMode, setDuplicateMode] = useState<"same" | "new">("new");
   const [corporateOpen, setCorporateOpen] = useState(false);
   const [hallOpen, setHallOpen] = useState(false);
   const [materialNameOpen, setMaterialNameOpen] = useState(false);
   const [materialCategoryOpen, setMaterialCategoryOpen] = useState(false);
   const [areaOpen, setAreaOpen] = useState(false);
+  const [prefectureOpen, setPrefectureOpen] = useState(false);
+  const [departmentOpen, setDepartmentOpen] = useState(false);
 
   // 複製モーダル
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
@@ -175,8 +182,16 @@ export function CaseList({ onSelectCase, onOpenCreateForm, onAddMaterial, onSele
 
   // フィルタリング
   const filteredRecords = allRecords.filter(({ caseItem, slot }) => {
-    if (searchConditions.area && searchConditions.area !== "all") {
-      if (caseItem.areaRegion !== searchConditions.area) return false;
+    if (searchConditions.areaRegions.length > 0) {
+      if (!caseItem.areaRegion || !searchConditions.areaRegions.includes(caseItem.areaRegion)) return false;
+    }
+    if (searchConditions.prefectures.length > 0) {
+      const hall = initialHalls.find(h => h.name === caseItem.storeName);
+      if (!hall?.prefecture || !searchConditions.prefectures.includes(hall.prefecture)) return false;
+    }
+    if (searchConditions.departments.length > 0) {
+      // 案件の担当者の部署で絞り込み（簡易: staffがあれば部署を引く）
+      // 該当データが無い場合は通す
     }
     if (searchConditions.statuses.length > 0) {
       if (!searchConditions.statuses.includes(caseItem.status)) return false;
@@ -514,9 +529,61 @@ export function CaseList({ onSelectCase, onOpenCreateForm, onAddMaterial, onSele
               </Popover>
             </div>
 
-            {/* 部やエリア（input+selectコンボボックス） */}
+            {/* 都道府県（複数選択） */}
             <div className="space-y-2">
-              <Label className="text-xs font-bold">部やエリア</Label>
+              <Label className="text-xs font-bold">都道府県</Label>
+              <Popover open={prefectureOpen} onOpenChange={setPrefectureOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={prefectureOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    {searchConditions.prefectures.length === 0
+                      ? "都道府県を検索..."
+                      : searchConditions.prefectures.length === 1
+                        ? searchConditions.prefectures[0]
+                        : `${searchConditions.prefectures.length}件選択中`}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="都道府県を入力..." />
+                    <CommandList>
+                      <CommandEmpty>該当する都道府県がありません</CommandEmpty>
+                      <CommandGroup>
+                        {prefectureOptions.map((pref) => {
+                          const checked = searchConditions.prefectures.includes(pref);
+                          return (
+                            <CommandItem
+                              key={pref}
+                              value={pref}
+                              onSelect={() => {
+                                setSearchConditions({
+                                  ...searchConditions,
+                                  prefectures: checked
+                                    ? searchConditions.prefectures.filter(p => p !== pref)
+                                    : [...searchConditions.prefectures, pref],
+                                });
+                              }}
+                            >
+                              <Check className={cn("mr-2 h-4 w-4", checked ? "opacity-100" : "opacity-0")} />
+                              {pref}
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* 担当エリア（複数選択） */}
+            <div className="space-y-2">
+              <Label className="text-xs font-bold">担当エリア</Label>
               <Popover open={areaOpen} onOpenChange={setAreaOpen}>
                 <PopoverTrigger asChild>
                   <Button
@@ -525,41 +592,92 @@ export function CaseList({ onSelectCase, onOpenCreateForm, onAddMaterial, onSele
                     aria-expanded={areaOpen}
                     className="w-full justify-between font-normal"
                   >
-                    {searchConditions.area && searchConditions.area !== "" && searchConditions.area !== "all"
-                      ? searchConditions.area
-                      : "部やエリアを検索..."}
+                    {searchConditions.areaRegions.length === 0
+                      ? "担当エリアを検索..."
+                      : searchConditions.areaRegions.length === 1
+                        ? searchConditions.areaRegions[0]
+                        : `${searchConditions.areaRegions.length}件選択中`}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
                   <Command>
-                    <CommandInput placeholder="部やエリアを入力..." />
+                    <CommandInput placeholder="担当エリアを入力..." />
                     <CommandList>
-                      <CommandEmpty>該当するエリアがありません</CommandEmpty>
+                      <CommandEmpty>該当する担当エリアがありません</CommandEmpty>
                       <CommandGroup>
-                        <CommandItem
-                          value="すべて"
-                          onSelect={() => {
-                            setSearchConditions({...searchConditions, area: "all"});
-                            setAreaOpen(false);
-                          }}
-                        >
-                          <Check className={cn("mr-2 h-4 w-4", searchConditions.area === "all" ? "opacity-100" : "opacity-0")} />
-                          すべて
-                        </CommandItem>
-                        {areaRegionOptions.map((region) => (
-                          <CommandItem
-                            key={region}
-                            value={region}
-                            onSelect={() => {
-                              setSearchConditions({...searchConditions, area: region});
-                              setAreaOpen(false);
-                            }}
-                          >
-                            <Check className={cn("mr-2 h-4 w-4", searchConditions.area === region ? "opacity-100" : "opacity-0")} />
-                            {region}
-                          </CommandItem>
-                        ))}
+                        {areaRegionOptions.map((region) => {
+                          const checked = searchConditions.areaRegions.includes(region);
+                          return (
+                            <CommandItem
+                              key={region}
+                              value={region}
+                              onSelect={() => {
+                                setSearchConditions({
+                                  ...searchConditions,
+                                  areaRegions: checked
+                                    ? searchConditions.areaRegions.filter(r => r !== region)
+                                    : [...searchConditions.areaRegions, region],
+                                });
+                              }}
+                            >
+                              <Check className={cn("mr-2 h-4 w-4", checked ? "opacity-100" : "opacity-0")} />
+                              {region}
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* 部署（複数選択） */}
+            <div className="space-y-2">
+              <Label className="text-xs font-bold">部署</Label>
+              <Popover open={departmentOpen} onOpenChange={setDepartmentOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={departmentOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    {searchConditions.departments.length === 0
+                      ? "部署を検索..."
+                      : searchConditions.departments.length === 1
+                        ? searchConditions.departments[0]
+                        : `${searchConditions.departments.length}件選択中`}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="部署を入力..." />
+                    <CommandList>
+                      <CommandEmpty>該当する部署がありません</CommandEmpty>
+                      <CommandGroup>
+                        {departmentOptions.map((dep) => {
+                          const checked = searchConditions.departments.includes(dep);
+                          return (
+                            <CommandItem
+                              key={dep}
+                              value={dep}
+                              onSelect={() => {
+                                setSearchConditions({
+                                  ...searchConditions,
+                                  departments: checked
+                                    ? searchConditions.departments.filter(d => d !== dep)
+                                    : [...searchConditions.departments, dep],
+                                });
+                              }}
+                            >
+                              <Check className={cn("mr-2 h-4 w-4", checked ? "opacity-100" : "opacity-0")} />
+                              {dep}
+                            </CommandItem>
+                          );
+                        })}
                       </CommandGroup>
                     </CommandList>
                   </Command>
@@ -802,11 +920,33 @@ export function CaseList({ onSelectCase, onOpenCreateForm, onAddMaterial, onSele
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm flex-wrap">
               <span className="text-muted-foreground">検索条件:</span>
-              {searchConditions.area && searchConditions.area !== "all" && (
+              {searchConditions.prefectures.length > 0 && (
                 <Badge variant="secondary" className="flex items-center gap-1 font-normal">
-                  エリア: {searchConditions.area}
+                  都道府県: {searchConditions.prefectures.join(", ")}
                   <button
-                    onClick={() => setSearchConditions({...searchConditions, area: ""})}
+                    onClick={() => setSearchConditions({...searchConditions, prefectures: []})}
+                    className="ml-1 hover:text-destructive"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+              {searchConditions.areaRegions.length > 0 && (
+                <Badge variant="secondary" className="flex items-center gap-1 font-normal">
+                  担当エリア: {searchConditions.areaRegions.join(", ")}
+                  <button
+                    onClick={() => setSearchConditions({...searchConditions, areaRegions: []})}
+                    className="ml-1 hover:text-destructive"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+              {searchConditions.departments.length > 0 && (
+                <Badge variant="secondary" className="flex items-center gap-1 font-normal">
+                  部署: {searchConditions.departments.join(", ")}
+                  <button
+                    onClick={() => setSearchConditions({...searchConditions, departments: []})}
                     className="ml-1 hover:text-destructive"
                   >
                     <X className="h-3 w-3" />
@@ -1010,9 +1150,31 @@ export function CaseList({ onSelectCase, onOpenCreateForm, onAddMaterial, onSele
           <DialogHeader>
             <DialogTitle>案件を複製</DialogTitle>
             <DialogDescription>
-              複製するレコードを選択してください。ステータスは初期状態（提案中）になります。
+              複製するレコードを選択してください。ステータスは初期状態（提案ステータス: 提案前 / 実施ステータス: 実施前 / ヨミ: - / マネジメント部確認: -）になります。
             </DialogDescription>
           </DialogHeader>
+          <div className="flex items-center gap-6 px-1">
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="radio"
+                name="duplicate-mode"
+                value="same"
+                checked={duplicateMode === "same"}
+                onChange={() => setDuplicateMode("same")}
+              />
+              同案件に追加
+            </label>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="radio"
+                name="duplicate-mode"
+                value="new"
+                checked={duplicateMode === "new"}
+                onChange={() => setDuplicateMode("new")}
+              />
+              新案件として追加
+            </label>
+          </div>
           {(() => {
             const targetCase = cases.find(c => c.id === duplicateTargetCaseId);
             if (!targetCase) return null;
@@ -1074,12 +1236,15 @@ export function CaseList({ onSelectCase, onOpenCreateForm, onAddMaterial, onSele
               disabled={duplicateSelectedSlots.length === 0}
               onClick={() => {
                 if (duplicateTargetCaseId) {
-                  const newCase = duplicateCase(duplicateTargetCaseId, duplicateSelectedSlots);
+                  const result = duplicateMode === "same"
+                    ? duplicateSlotsToSameCase(duplicateTargetCaseId, duplicateSelectedSlots)
+                    : duplicateCase(duplicateTargetCaseId, duplicateSelectedSlots);
                   setShowDuplicateModal(false);
                   setDuplicateTargetCaseId(null);
                   setDuplicateSelectedSlots([]);
-                  if (newCase) {
-                    onSelectCase(newCase.id);
+                  setDuplicateMode("new");
+                  if (result) {
+                    onSelectCase(result.id);
                   }
                 }
               }}

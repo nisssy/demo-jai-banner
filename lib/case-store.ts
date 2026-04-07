@@ -23,6 +23,7 @@ interface CaseStore {
   
   // Duplicate
   duplicateCase: (caseId: string, selectedSlotIds: string[]) => Case | null;
+  duplicateSlotsToSameCase: (caseId: string, selectedSlotIds: string[]) => Case | null;
 
   // Proposal Actions
   addProposalSlot: (caseId: string, slot: ProposalSlot) => void;
@@ -118,6 +119,10 @@ export const useCaseStore = create<CaseStore>((set, get) => ({
         ...s,
         id: `slot-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         recordNumber: String(13828 + Math.floor(Math.random() * 10000)),
+        proposalStatus: "提案前",
+        executionStatus: "実施前",
+        yomi: "-",
+        managementCheck: "-",
       }));
     const newCase: Case = {
       ...original,
@@ -134,6 +139,32 @@ export const useCaseStore = create<CaseStore>((set, get) => ({
     };
     set((state) => ({ cases: [newCase, ...state.cases] }));
     return newCase;
+  },
+
+  duplicateSlotsToSameCase: (caseId, selectedSlotIds) => {
+    const { cases } = get();
+    const original = cases.find((c) => c.id === caseId);
+    if (!original) return null;
+    const duplicatedSlots: ProposalSlot[] = original.proposalSlots
+      .filter((s) => selectedSlotIds.includes(s.id))
+      .map((s) => ({
+        ...s,
+        id: `slot-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        recordNumber: String(13828 + Math.floor(Math.random() * 10000)),
+        proposalStatus: "提案前",
+        executionStatus: "実施前",
+        yomi: "-",
+        managementCheck: "-",
+      }));
+    const updated: Case = {
+      ...original,
+      proposalSlots: [...original.proposalSlots, ...duplicatedSlots],
+      updatedAt: new Date(),
+    };
+    set((state) => ({
+      cases: state.cases.map((c) => (c.id === caseId ? updated : c)),
+    }));
+    return updated;
   },
 
   addProposalSlot: (caseId, slot) => {
