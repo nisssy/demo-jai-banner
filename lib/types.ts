@@ -192,8 +192,9 @@ export function findOverlappingSlots(
 }
 
 // 案件のステータス
-export type CaseStatus = 
-  | "提案中" 
+export type CaseStatus =
+  | "提案前"
+  | "提案中"
   | "配信準備中" 
   | "事務確認中" 
   | "差し戻し" 

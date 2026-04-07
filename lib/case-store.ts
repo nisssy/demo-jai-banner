@@ -128,7 +128,7 @@ export const useCaseStore = create<CaseStore>((set, get) => ({
       ...original,
       id: `case-${Date.now()}`,
       caseNumber: `PJ-${String(caseNum).padStart(3, "0")}`,
-      status: "提案中",
+      status: "提案前",
       projectStatus: "提案中",
       createdAt: new Date(),
       updatedAt: new Date(),
