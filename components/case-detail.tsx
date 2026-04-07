@@ -166,6 +166,9 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
   const [showApplicationInfoModal, setShowApplicationInfoModal] = useState(false);
   const [publishingAdditionalRows, setPublishingAdditionalRows] = useState<number[]>([]);
   const [uploadedImages, setUploadedImages] = useState<Record<string, string>>({});
+  const [uploadedImageUrls, setUploadedImageUrls] = useState<Record<string, string>>({});
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [emailSent, setEmailSent] = useState(false);
   const [activeRecordSlotId, setActiveRecordSlotId] = useState<string | null>(initialSlotId ?? null);
 
   useEffect(() => {
@@ -481,7 +484,8 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
 
   // ステッパーのステップ定義
   const stepperSteps = [
-    { label: "提案", done: caseData.status !== "提案中" && caseData.status !== "見送り" },
+    { label: "実施方針", done: caseData.status !== "提案中" && caseData.status !== "提案前" && caseData.status !== "見送り" },
+    { label: "申込書送付", done: !!caseData.applicationDocumentUrl || caseData.status === "掲載中" || caseData.status === "掲載停止" || caseData.status === "掲載停止依頼中" },
     { label: "掲載", done: caseData.status === "掲載中" || caseData.status === "掲載停止" || caseData.status === "掲載停止依頼中" },
   ];
 
@@ -661,8 +665,116 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
         {/* ステッパーに対応したコンテンツ */}
         {slotMaterialState && (
           <div className="space-y-6">
-            {/* ステップ1: 提案（実施方針確認） */}
+            {/* ステップ1: 実施方針 */}
             {activeStepperStep === 0 && (
+              <Card className="p-6 space-y-6">
+                <h3 className="text-base font-semibold flex items-center gap-2">
+                  <ClipboardList className="h-5 w-5" />
+                  実施方針
+                  {isReviewPending && <Badge className="bg-purple-100 text-purple-800">事務確認中</Badge>}
+                  {isReviewRejected && <Badge variant="destructive">差し戻し</Badge>}
+                </h3>
+                <p className="text-sm text-muted-foreground">顧客からの回答を記録してください</p>
+
+                <div className="space-y-3">
+                  <Textarea
+                    placeholder="顧客からの回答内容を入力..."
+                    value={slotMaterialState.implementationPolicy || ""}
+                    onChange={(e) => updateMaterialField(slotMaterialState.id, { implementationPolicy: e.target.value })}
+                    rows={6}
+                  />
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4 border-t">
+                  <Button variant="outline" onClick={() => setShowSkipDialog(true)}>
+                    見送る
+                  </Button>
+                  <Button
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() => setActiveStepperStep(1)}
+                  >
+                    <Send className="mr-2 h-4 w-4" />
+                    配信を進める
+                  </Button>
+                </div>
+              </Card>
+            )}
+
+            {/* ステップ2: 申込書送付 + 基本情報登録 */}
+            {activeStepperStep === 1 && (
+              <Card className="p-6 space-y-6">
+                <h3 className="text-base font-semibold flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  申込書送付
+                </h3>
+
+                {/* 顧客へメール送信 */}
+                <div className="border rounded-lg p-4 space-y-3">
+                  <h4 className="text-sm font-semibold flex items-center gap-2">
+                    <Send className="h-4 w-4" />
+                    顧客へメール送信
+                  </h4>
+                  <div className="bg-blue-50 border border-blue-100 rounded px-3 py-2 text-sm flex items-center justify-between">
+                    <span className="text-blue-700 underline cursor-pointer">📎 LINE広告申込書.xlsx</span>
+                    <span className="text-xs text-muted-foreground">(クリックでプレビュー)</span>
+                  </div>
+                  <div className="border rounded p-3 text-sm whitespace-pre-line bg-white">
+                    {`お世話になっております。\n\nLINE広告のお申し込みについて、添付の申込書にご記入の上、\nご返送いただけますようお願いいたします。\n\nご不明点がございましたら、お気軽にお問い合わせください。\n\nよろしくお願いいたします。`}
+                  </div>
+                  <div className="flex justify-end">
+                    <Button
+                      size="sm"
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                      onClick={() => setEmailSent(true)}
+                    >
+                      <Send className="mr-2 h-4 w-4" />
+                      {emailSent ? "送信済み" : "送信"}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* 基本情報登録（申込書アップロード） */}
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    基本情報登録
+                  </h4>
+                  <p className="text-xs text-muted-foreground">顧客から返送された申込書をアップロード</p>
+                  {(() => {
+                    const isAnniversary = slotMaterialState.usageMethod === "anniversary";
+                    const selectedPack = isAnniversary
+                      ? corporationPacks.find((p) => p.id === slotMaterialState.selectedPackId)
+                      : null;
+                    return (
+                      <ApplicationUpload
+                        documentUrl={caseData.applicationDocumentUrl}
+                        onUpload={handleUploadApplication}
+                        onRemove={handleRemoveApplication}
+                        readOnly={isReviewPending}
+                        alwaysShowData={true}
+                        isAnniversaryPack={isAnniversary}
+                        anniversaryPackTitle={selectedPack?.title}
+                        anniversaryPackExpiry={
+                          selectedPack
+                            ? format(selectedPack.expiryDate, "yyyy/MM/dd", { locale: ja })
+                            : undefined
+                        }
+                      />
+                    );
+                  })()}
+                </div>
+
+                <div className="flex justify-between pt-4 border-t">
+                  <Button variant="outline" onClick={() => setActiveStepperStep(0)}>戻る</Button>
+                  <Button onClick={() => setActiveStepperStep(2)}>
+                    次へ（掲載へ）
+                  </Button>
+                </div>
+              </Card>
+            )}
+
+            {/* （旧）ステップ詳細: 商材区分・利用方法 — hidden in new flow */}
+            {false && activeStepperStep === 0 && (
               <Card className="p-6 space-y-6">
                 <h3 className="text-base font-semibold flex items-center gap-2">
                   提案 - 実施方針
@@ -906,8 +1018,8 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
               </Card>
             )}
 
-            {/* ステップ2: 掲載 */}
-            {activeStepperStep === 1 && (
+            {/* ステップ3: 掲載 */}
+            {activeStepperStep === 2 && (
               <Card className="p-6 space-y-6">
                 <h3 className="text-base font-semibold">掲載</h3>
 
@@ -961,7 +1073,15 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                                 <div className="space-y-1">
                                   {uploadedImages[`${slot.id}-${rowIdx}`] ? (
                                     <div className="flex items-center gap-2">
-                                      <span className="text-xs text-green-600">✓ アップロード済み</span>
+                                      {uploadedImageUrls[`${slot.id}-${rowIdx}`] && (
+                                        <img
+                                          src={uploadedImageUrls[`${slot.id}-${rowIdx}`]}
+                                          alt="thumb"
+                                          className="h-10 w-10 object-cover rounded border cursor-pointer"
+                                          onClick={() => setImagePreviewUrl(uploadedImageUrls[`${slot.id}-${rowIdx}`])}
+                                        />
+                                      )}
+                                      <span className="text-xs text-green-600">✓</span>
                                       <button
                                         type="button"
                                         className="text-red-500 text-xs hover:underline"
@@ -969,6 +1089,9 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                                           const newImages = { ...uploadedImages };
                                           delete newImages[`${slot.id}-${rowIdx}`];
                                           setUploadedImages(newImages);
+                                          const newUrls = { ...uploadedImageUrls };
+                                          delete newUrls[`${slot.id}-${rowIdx}`];
+                                          setUploadedImageUrls(newUrls);
                                         }}
                                       >
                                         削除
@@ -984,10 +1107,16 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                                         onChange={(e) => {
                                           const file = e.target.files?.[0];
                                           if (file) {
+                                            const url = URL.createObjectURL(file);
                                             setUploadedImages(prev => ({
                                               ...prev,
                                               [`${slot.id}-${rowIdx}`]: file.name,
                                             }));
+                                            setUploadedImageUrls(prev => ({
+                                              ...prev,
+                                              [`${slot.id}-${rowIdx}`]: url,
+                                            }));
+                                            setImagePreviewUrl(url);
                                           }
                                         }}
                                       />
@@ -1030,7 +1159,15 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                               <div className="space-y-1">
                                 {uploadedImages[`add-${rowId}`] ? (
                                   <div className="flex items-center gap-2">
-                                    <span className="text-xs text-green-600">✓ アップロード済み</span>
+                                    {uploadedImageUrls[`add-${rowId}`] && (
+                                      <img
+                                        src={uploadedImageUrls[`add-${rowId}`]}
+                                        alt="thumb"
+                                        className="h-10 w-10 object-cover rounded border cursor-pointer"
+                                        onClick={() => setImagePreviewUrl(uploadedImageUrls[`add-${rowId}`])}
+                                      />
+                                    )}
+                                    <span className="text-xs text-green-600">✓</span>
                                     <button
                                       type="button"
                                       className="text-red-500 text-xs hover:underline"
@@ -1038,6 +1175,9 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                                         const newImages = { ...uploadedImages };
                                         delete newImages[`add-${rowId}`];
                                         setUploadedImages(newImages);
+                                        const newUrls = { ...uploadedImageUrls };
+                                        delete newUrls[`add-${rowId}`];
+                                        setUploadedImageUrls(newUrls);
                                       }}
                                     >
                                       削除
@@ -1053,10 +1193,16 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                                       onChange={(e) => {
                                         const file = e.target.files?.[0];
                                         if (file) {
+                                          const url = URL.createObjectURL(file);
                                           setUploadedImages(prev => ({
                                             ...prev,
                                             [`add-${rowId}`]: file.name,
                                           }));
+                                          setUploadedImageUrls(prev => ({
+                                            ...prev,
+                                            [`add-${rowId}`]: url,
+                                          }));
+                                          setImagePreviewUrl(url);
                                         }
                                       }}
                                     />
@@ -1109,7 +1255,7 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                 </div>
 
                 <div className="flex justify-between pt-4 border-t">
-                  <Button variant="outline" onClick={() => setActiveStepperStep(0)}>戻る</Button>
+                  <Button variant="outline" onClick={() => setActiveStepperStep(1)}>戻る</Button>
                   <div className="flex gap-3">
                     {!isReviewPending && !isPublishing && (
                       <Button onClick={handleRequestReview}>
@@ -1126,8 +1272,26 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
           </div>
         )}
 
-        {/* 営業/事務 別コンテンツ */}
-        {slotMaterialState && (
+        {/* 画像プレビューモーダル（掲載素材アップロード時） */}
+        <Dialog open={!!imagePreviewUrl} onOpenChange={(open) => !open && setImagePreviewUrl(null)}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>画像プレビュー</DialogTitle>
+              <DialogDescription>アップロードした画像のプレビューです</DialogDescription>
+            </DialogHeader>
+            {imagePreviewUrl && (
+              <div className="flex justify-center">
+                <img src={imagePreviewUrl} alt="preview" className="max-h-[60vh] object-contain rounded border" />
+              </div>
+            )}
+            <DialogFooter>
+              <Button onClick={() => setImagePreviewUrl(null)}>閉じる</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* 営業/事務 別コンテンツ（掲載ステップでは非表示） */}
+        {slotMaterialState && activeStepperStep !== 2 && (
           <div className="space-y-6">
             {isAdmin ? (
               <>
