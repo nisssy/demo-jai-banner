@@ -165,8 +165,8 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
   const [rejectComment, setRejectComment] = useState("");
   const [showApplicationInfoModal, setShowApplicationInfoModal] = useState(false);
   const [publishingAdditionalRows, setPublishingAdditionalRows] = useState<number[]>([]);
-  const [uploadedImages, setUploadedImages] = useState<Record<string, string>>({});
-  const [uploadedImageUrls, setUploadedImageUrls] = useState<Record<string, string>>({});
+  const [uploadedImages, setUploadedImages] = useState<Record<string, string[]>>({});
+  const [uploadedImageUrls, setUploadedImageUrls] = useState<Record<string, string[]>>({});
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [emailSent, setEmailSent] = useState(false);
   const [activeRecordSlotId, setActiveRecordSlotId] = useState<string | null>(initialSlotId ?? null);
@@ -1071,57 +1071,64 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                               </td>
                               <td className="p-2 border-r">
                                 <div className="space-y-1">
-                                  {uploadedImages[`${slot.id}-${rowIdx}`] ? (
-                                    <div className="flex items-center gap-2">
-                                      {uploadedImageUrls[`${slot.id}-${rowIdx}`] && (
-                                        <img
-                                          src={uploadedImageUrls[`${slot.id}-${rowIdx}`]}
-                                          alt="thumb"
-                                          className="h-10 w-10 object-cover rounded border cursor-pointer"
-                                          onClick={() => setImagePreviewUrl(uploadedImageUrls[`${slot.id}-${rowIdx}`])}
-                                        />
-                                      )}
-                                      <span className="text-xs text-green-600">✓</span>
-                                      <button
-                                        type="button"
-                                        className="text-red-500 text-xs hover:underline"
-                                        onClick={() => {
-                                          const newImages = { ...uploadedImages };
-                                          delete newImages[`${slot.id}-${rowIdx}`];
-                                          setUploadedImages(newImages);
-                                          const newUrls = { ...uploadedImageUrls };
-                                          delete newUrls[`${slot.id}-${rowIdx}`];
-                                          setUploadedImageUrls(newUrls);
-                                        }}
-                                      >
-                                        削除
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <label className="cursor-pointer">
-                                      <span className="text-blue-600 text-xs hover:underline">画像をアップロード</span>
-                                      <input
-                                        type="file"
-                                        accept="image/*"
-                                        className="hidden"
-                                        onChange={(e) => {
-                                          const file = e.target.files?.[0];
-                                          if (file) {
-                                            const url = URL.createObjectURL(file);
-                                            setUploadedImages(prev => ({
-                                              ...prev,
-                                              [`${slot.id}-${rowIdx}`]: file.name,
-                                            }));
-                                            setUploadedImageUrls(prev => ({
-                                              ...prev,
-                                              [`${slot.id}-${rowIdx}`]: url,
-                                            }));
-                                            setImagePreviewUrl(url);
-                                          }
-                                        }}
-                                      />
-                                    </label>
-                                  )}
+                                  {(() => {
+                                    const key = `${slot.id}-${rowIdx}`;
+                                    const urls = uploadedImageUrls[key] || [];
+                                    return (
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        {urls.map((url, i) => (
+                                          <div key={i} className="relative group">
+                                            <img
+                                              src={url}
+                                              alt="thumb"
+                                              className="h-10 w-10 object-cover rounded border cursor-pointer"
+                                              onClick={() => setImagePreviewUrl(url)}
+                                            />
+                                            <button
+                                              type="button"
+                                              className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100"
+                                              onClick={() => {
+                                                setUploadedImages(prev => ({
+                                                  ...prev,
+                                                  [key]: (prev[key] || []).filter((_, idx) => idx !== i),
+                                                }));
+                                                setUploadedImageUrls(prev => ({
+                                                  ...prev,
+                                                  [key]: (prev[key] || []).filter((_, idx) => idx !== i),
+                                                }));
+                                              }}
+                                            >
+                                              ×
+                                            </button>
+                                          </div>
+                                        ))}
+                                        <label className="cursor-pointer">
+                                          <span className="text-blue-600 text-xs hover:underline">＋画像追加</span>
+                                          <input
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            onChange={(e) => {
+                                              const file = e.target.files?.[0];
+                                              if (file) {
+                                                const url = URL.createObjectURL(file);
+                                                setUploadedImages(prev => ({
+                                                  ...prev,
+                                                  [key]: [...(prev[key] || []), file.name],
+                                                }));
+                                                setUploadedImageUrls(prev => ({
+                                                  ...prev,
+                                                  [key]: [...(prev[key] || []), url],
+                                                }));
+                                                setImagePreviewUrl(url);
+                                                e.target.value = "";
+                                              }
+                                            }}
+                                          />
+                                        </label>
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                               </td>
                               <td className="p-2 border-r">
@@ -1157,57 +1164,64 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
                             <td className="p-2 border-r"><Input type="date" className="h-8 text-xs w-[130px]" /></td>
                             <td className="p-2 border-r">
                               <div className="space-y-1">
-                                {uploadedImages[`add-${rowId}`] ? (
-                                  <div className="flex items-center gap-2">
-                                    {uploadedImageUrls[`add-${rowId}`] && (
-                                      <img
-                                        src={uploadedImageUrls[`add-${rowId}`]}
-                                        alt="thumb"
-                                        className="h-10 w-10 object-cover rounded border cursor-pointer"
-                                        onClick={() => setImagePreviewUrl(uploadedImageUrls[`add-${rowId}`])}
-                                      />
-                                    )}
-                                    <span className="text-xs text-green-600">✓</span>
-                                    <button
-                                      type="button"
-                                      className="text-red-500 text-xs hover:underline"
-                                      onClick={() => {
-                                        const newImages = { ...uploadedImages };
-                                        delete newImages[`add-${rowId}`];
-                                        setUploadedImages(newImages);
-                                        const newUrls = { ...uploadedImageUrls };
-                                        delete newUrls[`add-${rowId}`];
-                                        setUploadedImageUrls(newUrls);
-                                      }}
-                                    >
-                                      削除
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <label className="cursor-pointer">
-                                    <span className="text-blue-600 text-xs hover:underline">画像をアップロード</span>
-                                    <input
-                                      type="file"
-                                      accept="image/*"
-                                      className="hidden"
-                                      onChange={(e) => {
-                                        const file = e.target.files?.[0];
-                                        if (file) {
-                                          const url = URL.createObjectURL(file);
-                                          setUploadedImages(prev => ({
-                                            ...prev,
-                                            [`add-${rowId}`]: file.name,
-                                          }));
-                                          setUploadedImageUrls(prev => ({
-                                            ...prev,
-                                            [`add-${rowId}`]: url,
-                                          }));
-                                          setImagePreviewUrl(url);
-                                        }
-                                      }}
-                                    />
-                                  </label>
-                                )}
+                                {(() => {
+                                  const key = `add-${rowId}`;
+                                  const urls = uploadedImageUrls[key] || [];
+                                  return (
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      {urls.map((url, i) => (
+                                        <div key={i} className="relative group">
+                                          <img
+                                            src={url}
+                                            alt="thumb"
+                                            className="h-10 w-10 object-cover rounded border cursor-pointer"
+                                            onClick={() => setImagePreviewUrl(url)}
+                                          />
+                                          <button
+                                            type="button"
+                                            className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100"
+                                            onClick={() => {
+                                              setUploadedImages(prev => ({
+                                                ...prev,
+                                                [key]: (prev[key] || []).filter((_, idx) => idx !== i),
+                                              }));
+                                              setUploadedImageUrls(prev => ({
+                                                ...prev,
+                                                [key]: (prev[key] || []).filter((_, idx) => idx !== i),
+                                              }));
+                                            }}
+                                          >
+                                            ×
+                                          </button>
+                                        </div>
+                                      ))}
+                                      <label className="cursor-pointer">
+                                        <span className="text-blue-600 text-xs hover:underline">＋画像追加</span>
+                                        <input
+                                          type="file"
+                                          accept="image/*"
+                                          className="hidden"
+                                          onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                              const url = URL.createObjectURL(file);
+                                              setUploadedImages(prev => ({
+                                                ...prev,
+                                                [key]: [...(prev[key] || []), file.name],
+                                              }));
+                                              setUploadedImageUrls(prev => ({
+                                                ...prev,
+                                                [key]: [...(prev[key] || []), url],
+                                              }));
+                                              setImagePreviewUrl(url);
+                                              e.target.value = "";
+                                            }
+                                          }}
+                                        />
+                                      </label>
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             </td>
                             <td className="p-2 border-r"><Input className="h-8 text-xs w-[120px]" placeholder="" /></td>
