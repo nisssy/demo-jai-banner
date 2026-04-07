@@ -1290,8 +1290,8 @@ export function CaseDetail({ caseData, onBack, onBackToList, initialSlotId, view
           </DialogContent>
         </Dialog>
 
-        {/* 営業/事務 別コンテンツ（掲載ステップでは非表示） */}
-        {slotMaterialState && activeStepperStep !== 2 && (
+        {/* 営業/事務 別コンテンツ（実施方針・掲載ステップでは非表示） */}
+        {slotMaterialState && activeStepperStep === 1 && (
           <div className="space-y-6">
             {isAdmin ? (
               <>
